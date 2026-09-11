@@ -6,10 +6,11 @@ import { Button } from '@/components/ui/button'
 import { Logo } from './logo'
 
 const NAV_LINKS = [
-  { label: 'For Artists', href: '#artists' },
-  { label: 'For Venues', href: '#venues' },
-  { label: 'How it works', href: '#how-it-works' },
-  { label: 'FAQ', href: '#faq' },
+  { label: 'Find gigs', href: '/gigs' },
+  { label: 'For Artists', href: '/#artists' },
+  { label: 'For Venues', href: '/#venues' },
+  { label: 'How it works', href: '/#how-it-works' },
+  { label: 'FAQ', href: '/#faq' },
 ]
 
 export function SiteHeader() {
