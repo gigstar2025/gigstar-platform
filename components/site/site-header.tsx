@@ -8,6 +8,7 @@ import { Logo } from './logo'
 const NAV_LINKS = [
   { label: 'Find gigs', href: '/gigs' },
   { label: 'Example profile', href: '/profile/luna-vega' },
+  { label: 'Profile editor', href: '/profile/luna-vega/edit' },
   { label: 'For Artists', href: '/#artists' },
   { label: 'For Venues', href: '/#venues' },
   { label: 'How it works', href: '/#how-it-works' },
