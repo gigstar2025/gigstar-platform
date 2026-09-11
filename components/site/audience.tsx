@@ -9,6 +9,7 @@ import {
   Ticket,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 
 type Feature = { icon: React.ElementType; title: string; description: string }
 
@@ -97,6 +98,21 @@ export function Audience() {
             Spend less time chasing gigs, more time playing them
           </h3>
           <FeatureList features={ARTIST_FEATURES} />
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+            <Button
+              nativeButton={false}
+              render={<a href="/profile/luna-vega" />}
+            >
+              View example profile
+            </Button>
+            <Button
+              variant="outline"
+              nativeButton={false}
+              render={<a href="/profile/luna-vega/edit" />}
+            >
+              Try the profile editor
+            </Button>
+          </div>
         </div>
 
         <div id="venues" className="scroll-mt-24 rounded-2xl border border-border bg-card p-8">
