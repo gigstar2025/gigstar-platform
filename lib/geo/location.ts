@@ -11,7 +11,12 @@ export const DEV_TOWN_COOKIE = 'gigstar_dev_town'
 export const RADIUS_OPTIONS = [5, 10, 25, 50] as const
 export const DEFAULT_RADIUS = 25
 
-export type LocationSource = 'auto' | 'manual-town' | 'manual-postcode' | 'dev'
+export type LocationSource =
+  | 'auto'
+  | 'manual-town'
+  | 'manual-postcode'
+  | 'precise'
+  | 'dev'
 
 export type ResolvedLocation = {
   label: string
@@ -78,6 +83,51 @@ export async function resolvePostcode(input: string): Promise<PostcodeResult> {
   } catch {
     return { ok: false, reason: 'error' }
   }
+}
+
+/**
+ * Turn raw coordinates from the browser's Geolocation API into a recognisable
+ * UK place using Postcodes.io reverse geocoding (no API key, no paid service).
+ *
+ * Privacy: we deliberately return a generalised place centroid and name here.
+ * The caller persists only this coarse result, never the device's raw GPS fix,
+ * and GigStar never continuously tracks the visitor.
+ */
+export async function reverseGeocode(
+  coords: Coords,
+): Promise<{ label: string; coords: Coords }> {
+  const endpoint = `https://api.postcodes.io/postcodes?lat=${coords.lat}&lon=${coords.lng}&limit=1`
+  try {
+    const res = await fetch(endpoint, { cache: 'no-store' })
+    if (res.ok) {
+      const json = (await res.json()) as {
+        result?: Array<{
+          latitude?: number
+          longitude?: number
+          admin_district?: string
+          parish?: string
+          admin_ward?: string
+          region?: string
+        }> | null
+      }
+      const match = json.result?.[0]
+      if (match && typeof match.latitude === 'number' && typeof match.longitude === 'number') {
+        const label =
+          match.admin_district ||
+          match.parish ||
+          match.admin_ward ||
+          match.region ||
+          nearestTown(coords).name
+        return { label, coords: { lat: match.latitude, lng: match.longitude } }
+      }
+    }
+  } catch {
+    // fall through to the fixed-list fallback below
+  }
+
+  // Fallback: snap to the closest recognised town from our fixed list.
+  const town = nearestTown(coords)
+  return { label: town.name, coords: { lat: town.lat, lng: town.lng } }
 }
 
 function parseCookieLocation(raw: string | undefined): ResolvedLocation | null {

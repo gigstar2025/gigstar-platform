@@ -10,6 +10,7 @@ import {
   isDevEnvironment,
   looksLikePostcode,
   resolvePostcode,
+  reverseGeocode,
   type ResolvedLocation,
 } from '@/lib/geo/location'
 import { findTown } from '@/lib/geo/towns'
@@ -83,6 +84,30 @@ export async function applyLocation(
     lat: town.lat,
     lng: town.lng,
     source: 'manual-town',
+  })
+  return { status: 'success' }
+}
+
+/**
+ * Handle the "Use my precise location" flow. The browser supplies raw
+ * coordinates from the Geolocation API; we reverse-geocode them to a
+ * recognisable UK place and persist only that coarse result (never the raw
+ * device fix). A success overrides any IP estimate and persists via cookie.
+ */
+export async function applyPreciseLocation(
+  lat: number,
+  lng: number,
+): Promise<LocationFormState> {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return { status: 'error', message: 'We could not read a valid position from your device.' }
+  }
+
+  const place = await reverseGeocode({ lat, lng })
+  await writeLocation({
+    label: place.label,
+    lat: place.coords.lat,
+    lng: place.coords.lng,
+    source: 'precise',
   })
   return { status: 'success' }
 }
