@@ -1,6 +1,7 @@
 import { SiteHeader } from '@/components/site/site-header'
 import { SiteFooter } from '@/components/site/site-footer'
 import { GuestBanner } from '@/components/home/guest-banner'
+import { LocationDiscovery } from '@/components/home/location-discovery'
 import { HomeFeed } from '@/components/home/home-feed'
 import { ShortFormSection } from '@/components/home/short-form-section'
 import {
@@ -22,6 +23,9 @@ export default function Page() {
       <SiteHeader />
       <main className="flex-1">
         <GuestBanner />
+        <div className="border-b border-border/60">
+          <LocationDiscovery />
+        </div>
         <HomeFeed />
         <div className="border-t border-border/60">
           <ShortFormSection />
