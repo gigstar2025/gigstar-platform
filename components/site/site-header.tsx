@@ -1,11 +1,13 @@
 'use client'
 
 import { useState } from 'react'
-import { Menu, X } from 'lucide-react'
+import { Menu, X, ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import { Logo } from './logo'
 
 const NAV_LINKS = [
+  { label: 'Home', href: '/' },
   { label: 'Find gigs', href: '/gigs' },
   { label: 'Profiles', href: '/profiles' },
   { label: 'Profile editor', href: '/profile/luna-vega/edit' },
@@ -15,17 +17,26 @@ const NAV_LINKS = [
   { label: 'FAQ', href: '/#faq' },
 ]
 
+// Development shortcuts to each example profile type.
+const PROFILE_EXAMPLES = [
+  { label: 'DJ profile', href: '/p/luna-vega' },
+  { label: 'Artist / band profile', href: '/p/echo-atlas' },
+  { label: 'Venue profile', href: '/p/the-lumen-rooms' },
+  { label: 'Event organiser profile', href: '/p/nightform' },
+]
+
 export function SiteHeader() {
   const [open, setOpen] = useState(false)
+  const [examplesOpen, setExamplesOpen] = useState(false)
 
   return (
     <header className="sticky top-0 z-50 border-b border-border/60 bg-background/80 backdrop-blur-xl">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-6 px-4 sm:px-6">
-        <a href="#top" className="shrink-0" aria-label="GigStar home">
+        <a href="/" className="shrink-0" aria-label="GigStar home">
           <Logo />
         </a>
 
-        <nav className="hidden items-center gap-8 md:flex" aria-label="Primary">
+        <nav className="hidden items-center gap-5 lg:flex" aria-label="Primary">
           {NAV_LINKS.map((link) => (
             <a
               key={link.href}
@@ -35,9 +46,44 @@ export function SiteHeader() {
               {link.label}
             </a>
           ))}
+
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setExamplesOpen((v) => !v)}
+              aria-expanded={examplesOpen}
+              className="flex items-center gap-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+            >
+              Profile examples
+              <ChevronDown className={cn('size-4 transition-transform', examplesOpen && 'rotate-180')} />
+            </button>
+            {examplesOpen && (
+              <>
+                <button
+                  type="button"
+                  aria-hidden
+                  tabIndex={-1}
+                  className="fixed inset-0 z-40 cursor-default"
+                  onClick={() => setExamplesOpen(false)}
+                />
+                <div className="absolute right-0 top-full z-50 mt-2 w-56 rounded-xl border border-border/60 bg-card p-1.5 shadow-lg">
+                  {PROFILE_EXAMPLES.map((link) => (
+                    <a
+                      key={link.href}
+                      href={link.href}
+                      onClick={() => setExamplesOpen(false)}
+                      className="block rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    >
+                      {link.label}
+                    </a>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         </nav>
 
-        <div className="hidden items-center gap-2 md:flex">
+        <div className="hidden items-center gap-2 lg:flex">
           <Button variant="ghost" size="sm">
             Log in
           </Button>
@@ -46,7 +92,7 @@ export function SiteHeader() {
 
         <button
           type="button"
-          className="grid size-10 place-items-center rounded-md text-foreground md:hidden"
+          className="grid size-10 place-items-center rounded-md text-foreground lg:hidden"
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
           aria-label={open ? 'Close menu' : 'Open menu'}
@@ -56,7 +102,7 @@ export function SiteHeader() {
       </div>
 
       {open && (
-        <div className="border-t border-border/60 bg-background md:hidden">
+        <div className="border-t border-border/60 bg-background lg:hidden">
           <nav className="mx-auto flex max-w-6xl flex-col gap-1 px-4 py-4" aria-label="Mobile">
             {NAV_LINKS.map((link) => (
               <a
@@ -68,6 +114,21 @@ export function SiteHeader() {
                 {link.label}
               </a>
             ))}
+
+            <p className="mt-3 px-3 pb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Profile examples
+            </p>
+            {PROFILE_EXAMPLES.map((link) => (
+              <a
+                key={link.href}
+                href={link.href}
+                onClick={() => setOpen(false)}
+                className="rounded-md px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              >
+                {link.label}
+              </a>
+            ))}
+
             <div className="mt-2 flex flex-col gap-2">
               <Button variant="outline" className="w-full">
                 Log in
