@@ -24,6 +24,7 @@ export const venueProfile: ShowcaseProfile = {
   ],
   website: '#',
   contactEmail: 'events@thelumenrooms.example',
+  followers: '9.2k',
   address: ['48 Tib Street', 'Northern Quarter', 'Manchester', 'M4 1LA'],
 
   sections: ['about', 'facts', 'events', 'spaces', 'gallery', 'menu', 'technical', 'reviews', 'related', 'contact'],

@@ -205,6 +205,8 @@ export interface ShowcaseProfile {
   location: string
   verified?: boolean
   featured?: boolean
+  /** Approximate follower count shown in the hero (e.g. "18.4k"). */
+  followers?: string
   /** Genre / style / venue-type / event-category chips shown in the hero. */
   chips: string[]
   bio: string[]

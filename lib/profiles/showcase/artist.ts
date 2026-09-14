@@ -28,11 +28,12 @@ export const artistProfile: ShowcaseProfile = {
   ],
   website: '#',
   contactEmail: 'hello@echoatlas.example',
+  followers: '18.4k',
   bookingPrice: 'From £1,200 / show',
   availability: 'Touring Parallel Lines — Spring 2026',
   performanceFormats: ['Full live band (60–90 min)', 'Stripped-back trio', 'DJ / hybrid set'],
 
-  sections: ['about', 'facts', 'featured-event', 'releases', 'videos', 'events', 'gallery', 'partners', 'mailing-list', 'related', 'contact'],
+  sections: ['about', 'facts', 'featured-event', 'releases', 'videos', 'events', 'gallery', 'reviews', 'partners', 'mailing-list', 'related', 'contact'],
 
   facts: [
     { label: 'Formed', value: '2021' },
@@ -55,6 +56,15 @@ export const artistProfile: ShowcaseProfile = {
     { id: 'g2', type: 'image', src: '/images/showcase/artist/gallery-2.png', alt: 'Echo Atlas in the studio' },
     { id: 'g3', type: 'image', src: '/images/showcase/artist/cover.png', alt: 'Echo Atlas press photo' },
   ],
+  reviews: {
+    average: 4.9,
+    count: 47,
+    items: [
+      { id: 'r1', author: 'Nightform', role: 'Promoter', rating: 5, date: '2025-11-02', quote: 'A genuine headline draw — they sold out Winter Lights and the crowd didn’t stop moving all night.' },
+      { id: 'r2', author: 'The Lumen Rooms', role: 'Venue', rating: 5, date: '2025-10-05', quote: 'Professional, punctual and the live show sounds enormous in the room. Always a highlight of the calendar.' },
+      { id: 'r3', author: 'Dusk & Static', role: 'Press', rating: 5, date: '2025-09-20', quote: '“Parallel Lines is the most assured British electronic debut of the year.”' },
+    ],
+  },
   partners: [
     { name: 'Halflight Records', kind: 'Label' },
     { name: 'Fender', kind: 'Instrument partner' },

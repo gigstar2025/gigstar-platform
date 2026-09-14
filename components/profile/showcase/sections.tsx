@@ -4,7 +4,6 @@ import {
   Disc3,
   Download,
   Leaf,
-  Mail,
   MapPin,
   Play,
   Star,
@@ -21,6 +20,8 @@ import { SECTION_LABELS } from "./section-config"
 import { EventCard } from "./event-card"
 import { EventStatusBadge } from "./status-badge"
 import { GalleryGrid } from "./gallery-grid"
+import { EnquiryForm } from "./enquiry-form"
+import { MailingListForm } from "./mailing-list-form"
 import {
   formatEventDate,
   PRIMARY_CTA,
@@ -571,15 +572,7 @@ export function MailingListSection({ profile }: { profile: ShowcaseProfile }) {
             ))}
           </ul>
         </div>
-        <form className="flex w-full gap-2 md:w-auto" aria-label="Mailing list signup">
-          <input
-            type="email"
-            required
-            placeholder="you@email.com"
-            className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring md:w-56"
-          />
-          <Button type="submit">Subscribe</Button>
-        </form>
+        <MailingListForm />
       </Card>
     </ShowcaseSection>
   )
@@ -588,24 +581,11 @@ export function MailingListSection({ profile }: { profile: ShowcaseProfile }) {
 export function ContactSection({ profile }: { profile: ShowcaseProfile }) {
   return (
     <ShowcaseSection id="contact" eyebrow={SECTION_LABELS.contact} title={PRIMARY_CTA[profile.type]}>
-      <Card className="gap-6 p-6 md:flex-row md:items-center md:justify-between md:p-8">
-        <div className="space-y-2">
-          <p className="text-pretty leading-relaxed text-muted-foreground">
-            Send an enquiry with your date, budget and any details. Online booking is coming soon —
-            for now, get in touch by email.
-          </p>
-          <p className="flex items-center gap-2 font-medium">
-            <Mail className="size-4 text-primary" /> {profile.contactEmail}
-          </p>
-        </div>
-        <Button
-          size="lg"
-          nativeButton={false}
-          render={<a href={`mailto:${profile.contactEmail}`} />}
-        >
-          {PRIMARY_CTA[profile.type]}
-        </Button>
-      </Card>
+      <EnquiryForm
+        type={profile.type}
+        displayName={profile.displayName}
+        contactEmail={profile.contactEmail}
+      />
     </ShowcaseSection>
   )
 }
