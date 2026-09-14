@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { BadgeCheck, Globe, Mail, MapPin } from "lucide-react"
+import { BadgeCheck, Globe, MapPin, Star, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "cn"
@@ -8,6 +8,7 @@ import {
   TYPE_LABELS,
   type ShowcaseProfile,
 } from "@/lib/profiles/showcase/types"
+import { ProfileActions } from "./profile-actions"
 
 export function ShowcaseHeader({ profile }: { profile: ShowcaseProfile }) {
   const isLogo = profile.type === "venue" || profile.type === "organiser"
@@ -64,6 +65,21 @@ export function ShowcaseHeader({ profile }: { profile: ShowcaseProfile }) {
                   <Globe className="size-4" /> Website
                 </a>
               ) : null}
+              {profile.followers ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <Users className="size-4" />
+                  <span className="font-semibold text-foreground">{profile.followers}</span> followers
+                </span>
+              ) : null}
+              {profile.reviews ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <Star className="size-4 fill-primary text-primary" />
+                  <span className="font-semibold text-foreground">
+                    {profile.reviews.average.toFixed(1)}
+                  </span>
+                  · {profile.reviews.count} reviews
+                </span>
+              ) : null}
             </div>
           </div>
         </div>
@@ -76,19 +92,12 @@ export function ShowcaseHeader({ profile }: { profile: ShowcaseProfile }) {
           ))}
         </div>
 
-        <div className="mt-5 flex flex-wrap items-center gap-3">
-          <Button size="lg" render={<Link href="#contact" />}>
+        <div className="mt-5 flex flex-wrap items-start gap-x-3 gap-y-4">
+          <Button size="lg" nativeButton={false} render={<Link href="#contact" />}>
             {PRIMARY_CTA[profile.type]}
           </Button>
-          <Button
-            size="lg"
-            variant="outline"
-            nativeButton={false}
-            render={<a href={`mailto:${profile.contactEmail}`} />}
-          >
-            <Mail className="size-4" /> Message
-          </Button>
-          <div className="ml-auto flex flex-wrap gap-2">
+          <ProfileActions displayName={profile.displayName} />
+          <div className="flex flex-wrap gap-2 sm:ml-auto sm:self-center">
             {profile.socials.map((s) => (
               <Button
                 key={s.platform}

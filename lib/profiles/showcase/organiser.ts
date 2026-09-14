@@ -24,6 +24,7 @@ export const organiserProfile: ShowcaseProfile = {
   ],
   website: '#',
   contactEmail: 'team@nightform.example',
+  followers: '24.1k',
 
   sections: ['about', 'facts', 'featured-event', 'events', 'past-events', 'gallery', 'partners', 'reviews', 'mailing-list', 'related', 'contact'],
 

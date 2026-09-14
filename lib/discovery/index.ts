@@ -147,12 +147,13 @@ export function countByType(region: Region, radius: number): Record<DiscoveryTyp
   }
 }
 
-const SHORT_DATE = new Intl.DateTimeFormat('en-GB', {
-  weekday: 'short',
-  day: 'numeric',
-  month: 'short',
-})
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
+// Deterministic formatting so server and client render identically.
+// Intl short-date output for en-GB varies across ICU versions (comma vs no comma),
+// which causes React hydration mismatches.
 export function formatEventDate(iso: string): string {
-  return SHORT_DATE.format(new Date(`${iso}T00:00:00`))
+  const d = new Date(`${iso}T00:00:00`)
+  return `${WEEKDAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}`
 }
