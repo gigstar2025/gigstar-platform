@@ -36,7 +36,7 @@ export function Faq() {
         </p>
       </div>
 
-      <Accordion openMultiple={false} className="mt-12 w-full">
+      <Accordion className="mt-12 w-full">
         {FAQS.map((faq, index) => (
           <AccordionItem key={faq.q} value={index}>
             <AccordionTrigger className="text-left font-display text-base font-semibold">

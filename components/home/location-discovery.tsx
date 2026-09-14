@@ -76,7 +76,14 @@ export function LocationDiscovery() {
 
   const [locInput, setLocInput] = useState('')
   const [suggestOpen, setSuggestOpen] = useState(false)
+  const [activeIndex, setActiveIndex] = useState(-1)
   const locBoxRef = useRef<HTMLDivElement>(null)
+  const locInputRef = useRef<HTMLInputElement>(null)
+
+  function focusLocation() {
+    locInputRef.current?.focus()
+    locInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
 
   const typeArg = activeType ?? undefined
 
@@ -120,6 +127,7 @@ export function LocationDiscovery() {
     setLocation({ label: s.label, lat: s.lat, lng: s.lng, source: 'manual' })
     setLocInput('')
     setSuggestOpen(false)
+    setActiveIndex(-1)
   }
 
   function handleClearFilters() {
@@ -198,27 +206,46 @@ export function LocationDiscovery() {
                 <MapPin className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                 <input
                   id="discover-location"
+                  ref={locInputRef}
                   type="text"
                   autoComplete="off"
                   value={locInput}
                   onChange={(e) => {
                     setLocInput(e.target.value)
                     setSuggestOpen(true)
+                    setActiveIndex(-1)
                   }}
                   onFocus={() => setSuggestOpen(true)}
                   onKeyDown={(e) => {
                     if (e.nativeEvent.isComposing || e.keyCode === 229) return
-                    if (e.key === 'Enter' && suggestions[0]) {
+                    if (e.key === 'ArrowDown') {
                       e.preventDefault()
-                      chooseSuggestion(suggestions[0])
+                      if (!suggestOpen) setSuggestOpen(true)
+                      setActiveIndex((i) => (suggestions.length ? (i + 1) % suggestions.length : -1))
+                    } else if (e.key === 'ArrowUp') {
+                      e.preventDefault()
+                      if (!suggestOpen) setSuggestOpen(true)
+                      setActiveIndex((i) =>
+                        suggestions.length ? (i <= 0 ? suggestions.length - 1 : i - 1) : -1,
+                      )
+                    } else if (e.key === 'Enter') {
+                      const pick = suggestions[activeIndex] ?? suggestions[0]
+                      if (pick) {
+                        e.preventDefault()
+                        chooseSuggestion(pick)
+                      }
                     } else if (e.key === 'Escape') {
                       setSuggestOpen(false)
+                      setActiveIndex(-1)
                     }
                   }}
                   placeholder="Town, city or postcode"
                   role="combobox"
                   aria-expanded={suggestOpen && suggestions.length > 0}
                   aria-controls="discover-location-list"
+                  aria-activedescendant={
+                    activeIndex >= 0 ? `discover-loc-opt-${activeIndex}` : undefined
+                  }
                   className="h-10 w-full rounded-full border border-input bg-background pl-9 pr-3 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
                 />
                 {suggestOpen && suggestions.length > 0 && (
@@ -227,15 +254,19 @@ export function LocationDiscovery() {
                     role="listbox"
                     className="absolute left-0 right-0 top-full z-40 mt-1 overflow-hidden rounded-xl border border-border/60 bg-popover shadow-lg"
                   >
-                    {suggestions.map((s) => (
-                      <li key={s.id} role="option" aria-selected={false}>
+                    {suggestions.map((s, i) => (
+                      <li key={s.id} id={`discover-loc-opt-${i}`} role="option" aria-selected={i === activeIndex}>
                         <button
                           type="button"
                           onMouseDown={(e) => {
                             e.preventDefault()
                             chooseSuggestion(s)
                           }}
-                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted"
+                          onMouseEnter={() => setActiveIndex(i)}
+                          className={cn(
+                            'flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted',
+                            i === activeIndex && 'bg-muted',
+                          )}
                         >
                           <MapPin className="size-3.5 shrink-0 text-muted-foreground" />
                           <span className="font-medium">{s.label}</span>
@@ -380,7 +411,10 @@ export function LocationDiscovery() {
                     : `Increase to ${nextRadiusWithResults.short}`}
                 </Button>
               )}
-              {radius !== ANYWHERE && (
+              <Button size="sm" variant="outline" onClick={focusLocation}>
+                Change location
+              </Button>
+              {radius !== ANYWHERE && nextRadiusWithResults?.value !== ANYWHERE && (
                 <Button size="sm" variant="outline" onClick={() => setRadius(ANYWHERE)}>
                   Search anywhere
                 </Button>
