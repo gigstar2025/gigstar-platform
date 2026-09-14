@@ -27,34 +27,15 @@ import {
   eventsNear,
   formatDistance,
   formatEventDate,
-  nearestAreaLabel,
   profilesNear,
   recommendedNear,
   searchLocationSuggestions,
-  type DiscoveryType,
   type EventStatus,
   type WithDistance,
   type DiscoveryProfile,
 } from '@/lib/discovery'
-
-type TypeFilter = 'all' | DiscoveryType
-
-type LocationSource = 'default' | 'preset' | 'manual' | 'geo'
-
-interface ActiveLocation {
-  label: string
-  lat: number
-  lng: number
-  source: LocationSource
-}
-
-const TYPE_FILTERS: { key: TypeFilter; label: string }[] = [
-  { key: 'all', label: 'All' },
-  { key: 'dj', label: 'DJs' },
-  { key: 'artist', label: 'Artists & Bands' },
-  { key: 'venue', label: 'Venues' },
-  { key: 'organiser', label: 'Organisers' },
-]
+import { useDiscovery } from './discovery-context'
+import { CATEGORIES } from '@/lib/home/feed-data'
 
 const STATUS_STYLES: Record<EventStatus, { label: string; className: string }> = {
   'on-sale': { label: 'On sale', className: 'bg-primary/15 text-primary' },
@@ -67,35 +48,37 @@ const STATUS_STYLES: Record<EventStatus, { label: string; className: string }> =
 
 const MAX_RESULTS = 12
 
-const DEFAULT_LOCATION: ActiveLocation = {
-  label: 'Hastings',
-  lat: REGION_CENTERS.hastings.lat,
-  lng: REGION_CENTERS.hastings.lng,
-  source: 'default',
-}
-
 const PRESETS: { label: string; lat: number; lng: number }[] = [
   { label: REGION_CENTERS.hastings.short, lat: REGION_CENTERS.hastings.lat, lng: REGION_CENTERS.hastings.lng },
   { label: REGION_CENTERS.london.short, lat: REGION_CENTERS.london.lat, lng: REGION_CENTERS.london.lng },
 ]
 
-const DEFAULT_RADIUS = 5
-const DEFAULT_TYPE: TypeFilter = 'all'
-
 export function LocationDiscovery() {
-  const [location, setLocation] = useState<ActiveLocation>(DEFAULT_LOCATION)
-  const [radius, setRadius] = useState<number>(DEFAULT_RADIUS)
-  const [type, setType] = useState<TypeFilter>(DEFAULT_TYPE)
-  const [search, setSearch] = useState('')
+  const {
+    location,
+    radius,
+    category,
+    search,
+    center,
+    activeType,
+    geoStatus,
+    geoMessage,
+    filtersActive,
+    radiusPhrase,
+    isAnywhere,
+    setLocation,
+    setRadius,
+    setCategory,
+    setSearch,
+    useMyLocation,
+    clearFilters,
+  } = useDiscovery()
 
   const [locInput, setLocInput] = useState('')
   const [suggestOpen, setSuggestOpen] = useState(false)
-  const [geoStatus, setGeoStatus] = useState<'idle' | 'loading' | 'error'>('idle')
-  const [geoMessage, setGeoMessage] = useState<string | null>(null)
   const locBoxRef = useRef<HTMLDivElement>(null)
 
-  const center = useMemo(() => ({ lat: location.lat, lng: location.lng }), [location.lat, location.lng])
-  const typeArg = type === 'all' ? undefined : type
+  const typeArg = activeType ?? undefined
 
   const hits = useMemo(
     () => profilesNear({ center, radius, type: typeArg, search }),
@@ -118,9 +101,6 @@ export function LocationDiscovery() {
     )
   }, [hits.length, radius, center, typeArg, search])
 
-  const filtersActive =
-    location.source !== 'default' || radius !== DEFAULT_RADIUS || type !== DEFAULT_TYPE || search.trim() !== ''
-
   // Close the suggestion dropdown on outside click.
   useEffect(() => {
     function onDown(e: MouseEvent) {
@@ -132,8 +112,6 @@ export function LocationDiscovery() {
 
   function applyPreset(preset: { label: string; lat: number; lng: number }) {
     setLocation({ label: preset.label, lat: preset.lat, lng: preset.lng, source: 'preset' })
-    setGeoStatus('idle')
-    setGeoMessage(null)
     setLocInput('')
     setSuggestOpen(false)
   }
@@ -142,48 +120,13 @@ export function LocationDiscovery() {
     setLocation({ label: s.label, lat: s.lat, lng: s.lng, source: 'manual' })
     setLocInput('')
     setSuggestOpen(false)
-    setGeoStatus('idle')
-    setGeoMessage(null)
   }
 
-  function useMyLocation() {
-    if (typeof navigator === 'undefined' || !('geolocation' in navigator)) {
-      setGeoStatus('error')
-      setGeoMessage('Geolocation is not supported here. Search by town or postcode instead.')
-      return
-    }
-    setGeoStatus('loading')
-    setGeoMessage(null)
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const point = { lat: pos.coords.latitude, lng: pos.coords.longitude }
-        setLocation({ label: nearestAreaLabel(point), lat: point.lat, lng: point.lng, source: 'geo' })
-        setGeoStatus('idle')
-      },
-      (err) => {
-        setGeoStatus('error')
-        setGeoMessage(
-          err.code === err.PERMISSION_DENIED
-            ? 'Location permission was declined. Search by town or postcode instead.'
-            : 'We could not find your location. Search by town or postcode instead.',
-        )
-      },
-      { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 },
-    )
-  }
-
-  function clearFilters() {
-    setLocation(DEFAULT_LOCATION)
-    setRadius(DEFAULT_RADIUS)
-    setType(DEFAULT_TYPE)
-    setSearch('')
+  function handleClearFilters() {
+    clearFilters()
     setLocInput('')
     setSuggestOpen(false)
-    setGeoStatus('idle')
-    setGeoMessage(null)
   }
-
-  const radiusPhrase = radius === ANYWHERE ? 'anywhere' : `within ${radius} ${radius === 1 ? 'mile' : 'miles'}`
 
   return (
     <section id="discover-near-you" className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6">
@@ -358,18 +301,18 @@ export function LocationDiscovery() {
             </div>
           </div>
 
-          {/* Type filter */}
+          {/* Category / type filter — shared with the main feed */}
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex flex-1 gap-2 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {TYPE_FILTERS.map((t) => (
+              {CATEGORIES.map((t) => (
                 <button
                   key={t.key}
                   type="button"
-                  onClick={() => setType(t.key)}
-                  aria-pressed={type === t.key}
+                  onClick={() => setCategory(t.key)}
+                  aria-pressed={category === t.key}
                   className={cn(
                     'shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors',
-                    type === t.key
+                    category === t.key
                       ? 'bg-foreground text-background'
                       : 'bg-muted text-muted-foreground hover:text-foreground',
                   )}
@@ -381,7 +324,7 @@ export function LocationDiscovery() {
             {filtersActive && (
               <button
                 type="button"
-                onClick={clearFilters}
+                onClick={handleClearFilters}
                 className="inline-flex shrink-0 items-center gap-1 rounded-full px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
               >
                 <X className="size-3.5" />
