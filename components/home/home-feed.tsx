@@ -1,17 +1,16 @@
 'use client'
 
-import { useState } from 'react'
 import { CategoryNav } from './category-nav'
 import { ProfileHighlights } from './profile-highlights'
 import { Feed } from './feed'
 import { RightRail } from './right-rail'
-import type { FeedCategory } from '@/lib/home/feed-data'
+import { useDiscovery } from './discovery-context'
 
-// HomeFeed — the primary homepage experience. Holds the active category in
-// local state and shares it between the mobile chip bar, the desktop rail, and
-// the feed itself.
+// HomeFeed — the primary homepage experience. The category filter reads and
+// writes the SHARED discovery state, so it stays in sync with the location
+// panel's type chips and drives the feed together with the active location.
 export function HomeFeed() {
-  const [category, setCategory] = useState<FeedCategory>('for-you')
+  const { category, setCategory } = useDiscovery()
 
   return (
     <>
@@ -33,7 +32,7 @@ export function HomeFeed() {
           <div className="mb-6">
             <ProfileHighlights />
           </div>
-          <Feed category={category} />
+          <Feed />
         </div>
 
         <aside className="hidden xl:block">

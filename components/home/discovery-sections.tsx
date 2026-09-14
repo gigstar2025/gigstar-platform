@@ -1,17 +1,20 @@
+'use client'
+
+import { useMemo } from 'react'
 import Link from 'next/link'
-import { BadgeCheck, MapPin, Users, CalendarDays, Music2 } from 'lucide-react'
+import { BadgeCheck, MapPin, Users, CalendarDays, Music2, Ticket } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { EventCard } from './event-card'
 import { SectionHeading } from './section-heading'
 import { FollowButton } from './follow-button'
+import { useDiscovery } from './discovery-context'
 import {
-  EVENTS_NEAR_YOU,
-  TRENDING_DJS,
-  FEATURED_ARTISTS,
-  POPULAR_VENUES,
-  FEATURED_ORGANISERS,
-  profileHref,
-} from '@/lib/home/feed-data'
+  djCardsNear,
+  artistCardsNear,
+  venueCardsNear,
+  organiserCardsNear,
+  eventsNearHome,
+} from '@/lib/home/derive'
+import { TicketStatus } from './ticket-status'
 
 const SECTION = 'mx-auto w-full max-w-6xl px-4 py-10 sm:px-6'
 
@@ -32,37 +35,99 @@ function Cover({ src, href }: { src: string; href: string }) {
   )
 }
 
+/** Radius-aware subtitle that avoids awkward phrasing when "Anywhere" is set. */
+function useRadiusSubtitle(base: string) {
+  const { radius, isAnywhere } = useDiscovery()
+  return isAnywhere ? base : `${base} · within ${radius} ${radius === 1 ? 'mile' : 'miles'}`
+}
+
 export function EventsNearYou() {
+  const { center, radius, areaLabel } = useDiscovery()
+  const events = useMemo(() => eventsNearHome(center, radius, 8), [center, radius])
+  const subtitle = useRadiusSubtitle('Live listings and tickets')
+  if (events.length === 0) return null
+
   return (
     <section id="events-near-you" className={SECTION}>
       <SectionHeading
-        title="Events near you"
-        subtitle="Manchester & the North West"
+        title={`Events near ${areaLabel}`}
+        subtitle={subtitle}
         actionLabel="See all events"
         actionHref="/gigs"
       />
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        {EVENTS_NEAR_YOU.map((e) => (
-          <EventCard key={e.id} event={e} />
-        ))}
+        {events.slice(0, 4).map((e) => {
+          const price = e.free ? 'Free' : e.priceFrom ? `From ${e.priceFrom}` : 'TBA'
+          const sold = e.status === 'sold-out'
+          const href = `/event/${e.slug}`
+          return (
+            <div key={e.slug} className="group flex flex-col overflow-hidden rounded-2xl border border-border/60 bg-card">
+              <Link href={href} className="relative block aspect-[3/4] overflow-hidden">
+                <img
+                  src={e.poster || '/placeholder.svg'}
+                  alt={e.title}
+                  className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
+                />
+                <div className="absolute left-3 top-3">
+                  <TicketStatus status={e.status} />
+                </div>
+              </Link>
+              <div className="flex flex-1 flex-col gap-2 p-4">
+                <h3 className="font-medium leading-snug text-balance">
+                  <Link href={href} className="hover:underline">
+                    {e.title}
+                  </Link>
+                </h3>
+                <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <CalendarDays className="size-3.5 shrink-0" />
+                  {e.dateLabel}
+                </p>
+                <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <MapPin className="size-3.5 shrink-0" />
+                  <span className="truncate">
+                    {e.venueName}, {e.town}
+                  </span>
+                </p>
+                <div className="mt-auto flex items-center justify-between gap-2 pt-2">
+                  <span className="text-sm font-semibold text-foreground">{price}</span>
+                  {sold ? (
+                    <Button size="sm" variant="secondary" disabled>
+                      Sold out
+                    </Button>
+                  ) : (
+                    <Button size="sm" nativeButton={false} render={<Link href={href} />}>
+                      <Ticket className="size-3.5" />
+                      Tickets
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )
+        })}
       </div>
     </section>
   )
 }
 
 export function TrendingDjs() {
+  const { center, radius, search, areaLabel } = useDiscovery()
+  const djs = useMemo(() => djCardsNear(center, radius, search), [center, radius, search])
+  const subtitle = useRadiusSubtitle('The selectors moving crowds right now')
+  if (djs.length === 0) return null
+
   return (
     <section id="trending-djs" className={SECTION}>
       <SectionHeading
-        title="Trending DJs"
-        subtitle="The selectors moving crowds right now"
+        title={`Trending DJs near ${areaLabel}`}
+        subtitle={subtitle}
         actionLabel="Browse DJs"
         actionHref="/profiles"
       />
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {TRENDING_DJS.map((dj, i) => (
-          <div key={i} className="group flex flex-col overflow-hidden rounded-2xl border border-border/60 bg-card">
-            <Cover src={dj.cover} href={profileHref(dj.slug)} />
+        {djs.map((dj) => (
+          <div key={dj.slug} className="group flex flex-col overflow-hidden rounded-2xl border border-border/60 bg-card">
+            <Cover src={dj.cover} href={dj.href} />
             <div className="flex flex-1 flex-col p-4">
               <img
                 src={dj.avatar || '/placeholder.svg'}
@@ -70,7 +135,7 @@ export function TrendingDjs() {
                 className="-mt-12 size-14 rounded-full object-cover ring-4 ring-card"
               />
               <div className="mt-2 flex items-center gap-1">
-                <Link href={profileHref(dj.slug)} className="font-medium hover:underline">
+                <Link href={dj.href} className="font-medium hover:underline">
                   {dj.displayName}
                 </Link>
                 <Verified show={dj.verified} />
@@ -95,24 +160,29 @@ export function TrendingDjs() {
 }
 
 export function FeaturedArtists() {
+  const { center, radius, search, areaLabel } = useDiscovery()
+  const artists = useMemo(() => artistCardsNear(center, radius, search), [center, radius, search])
+  const subtitle = useRadiusSubtitle('New releases and live acts to book')
+  if (artists.length === 0) return null
+
   return (
     <section id="featured-artists" className={SECTION}>
       <SectionHeading
-        title="Featured artists & bands"
-        subtitle="New releases and live acts to book"
+        title={`Artists & bands near ${areaLabel}`}
+        subtitle={subtitle}
         actionLabel="Browse artists"
         actionHref="/profiles"
       />
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {FEATURED_ARTISTS.map((a, i) => (
-          <div key={i} className="group flex flex-col overflow-hidden rounded-2xl border border-border/60 bg-card">
-            <Cover src={a.cover} href={profileHref(a.slug)} />
+        {artists.map((a) => (
+          <div key={a.slug} className="group flex flex-col overflow-hidden rounded-2xl border border-border/60 bg-card">
+            <Cover src={a.cover} href={a.href} />
             <div className="flex flex-1 flex-col p-4">
               <div className="flex items-center gap-3">
                 <img src={a.avatar || '/placeholder.svg'} alt="" className="size-11 rounded-full object-cover" />
                 <div className="min-w-0">
                   <div className="flex items-center gap-1">
-                    <Link href={profileHref(a.slug)} className="truncate font-medium hover:underline">
+                    <Link href={a.href} className="truncate font-medium hover:underline">
                       {a.displayName}
                     </Link>
                     <Verified show={a.verified} />
@@ -124,7 +194,7 @@ export function FeaturedArtists() {
                 <img src={a.releaseArtwork || '/placeholder.svg'} alt="" className="size-10 rounded-md object-cover" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{a.releaseTitle}</p>
-                  <p className="text-xs text-muted-foreground">{a.releaseType}</p>
+                  <p className="truncate text-xs text-muted-foreground">{a.releaseType}</p>
                 </div>
               </div>
               <div className="mt-4 flex items-center gap-2 pt-1">
@@ -133,7 +203,7 @@ export function FeaturedArtists() {
                   variant="outline"
                   className="flex-1"
                   nativeButton={false}
-                  render={<Link href={profileHref(a.slug)} />}
+                  render={<Link href={a.href} />}
                 >
                   View profile
                 </Button>
@@ -148,21 +218,26 @@ export function FeaturedArtists() {
 }
 
 export function PopularVenues() {
+  const { center, radius, search, areaLabel } = useDiscovery()
+  const venues = useMemo(() => venueCardsNear(center, radius, search), [center, radius, search])
+  const subtitle = useRadiusSubtitle('Spaces hosting the best nights out')
+  if (venues.length === 0) return null
+
   return (
     <section id="popular-venues" className={SECTION}>
       <SectionHeading
-        title="Popular venues"
-        subtitle="Spaces hosting the best nights out"
+        title={`Venues around ${areaLabel}`}
+        subtitle={subtitle}
         actionLabel="Browse venues"
         actionHref="/profiles"
       />
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {POPULAR_VENUES.map((v, i) => (
-          <div key={i} className="group flex flex-col overflow-hidden rounded-2xl border border-border/60 bg-card">
-            <Cover src={v.cover} href={profileHref(v.slug)} />
+        {venues.map((v) => (
+          <div key={v.slug} className="group flex flex-col overflow-hidden rounded-2xl border border-border/60 bg-card">
+            <Cover src={v.cover} href={v.href} />
             <div className="flex flex-1 flex-col p-4">
               <div className="flex items-center gap-1">
-                <Link href={profileHref(v.slug)} className="font-medium hover:underline">
+                <Link href={v.href} className="font-medium hover:underline">
                   {v.displayName}
                 </Link>
                 <Verified show={v.verified} />
@@ -188,7 +263,7 @@ export function PopularVenues() {
                   variant="outline"
                   className="flex-1"
                   nativeButton={false}
-                  render={<Link href={profileHref(v.slug)} />}
+                  render={<Link href={v.href} />}
                 >
                   View venue
                 </Button>
@@ -203,24 +278,29 @@ export function PopularVenues() {
 }
 
 export function FeaturedOrganisers() {
+  const { center, radius, search, areaLabel } = useDiscovery()
+  const organisers = useMemo(() => organiserCardsNear(center, radius, search), [center, radius, search])
+  const subtitle = useRadiusSubtitle('The promoters behind the line-ups')
+  if (organisers.length === 0) return null
+
   return (
     <section id="featured-organisers" className={SECTION}>
       <SectionHeading
-        title="Featured organisers"
-        subtitle="The promoters behind the line-ups"
+        title={`Organisers near ${areaLabel}`}
+        subtitle={subtitle}
         actionLabel="Browse organisers"
         actionHref="/profiles"
       />
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {FEATURED_ORGANISERS.map((o, i) => (
-          <div key={i} className="group flex flex-col overflow-hidden rounded-2xl border border-border/60 bg-card">
-            <Cover src={o.cover} href={profileHref(o.slug)} />
+        {organisers.map((o) => (
+          <div key={o.slug} className="group flex flex-col overflow-hidden rounded-2xl border border-border/60 bg-card">
+            <Cover src={o.cover} href={o.href} />
             <div className="flex flex-1 flex-col p-4">
               <div className="flex items-center gap-3">
                 <img src={o.avatar || '/placeholder.svg'} alt="" className="size-11 rounded-full object-cover" />
                 <div className="min-w-0">
                   <div className="flex items-center gap-1">
-                    <Link href={profileHref(o.slug)} className="truncate font-medium hover:underline">
+                    <Link href={o.href} className="truncate font-medium hover:underline">
                       {o.displayName}
                     </Link>
                     <Verified show={o.verified} />
@@ -244,7 +324,7 @@ export function FeaturedOrganisers() {
                   variant="outline"
                   className="flex-1"
                   nativeButton={false}
-                  render={<Link href={profileHref(o.slug)} />}
+                  render={<Link href={o.href} />}
                 >
                   View profile
                 </Button>
