@@ -1,369 +1,301 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import {
-  ArrowLeft,
-  ArrowUp,
-  ArrowDown,
-  Eye,
-  EyeOff,
-  Trash2,
-  Plus,
-  Disc3,
-  Video,
-  Radio,
-  ImageIcon,
-  CalendarDays,
-  GripVertical,
-  Pencil,
-  LayoutGrid,
-} from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { Switch } from '@/components/ui/switch'
-import { Badge } from '@/components/ui/badge'
+import { Check, ExternalLink, Eye, Info, Loader2, RotateCcw, Save } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { ProfileHeader } from '@/components/profile/profile-header'
-import { ModuleView } from '@/components/profile/module-view'
-import {
-  createEmptyModule,
-  MODULE_META,
-  type ModuleType,
-  type Profile,
-  type ProfileModule,
-} from '@/lib/profiles/types'
+import { Button } from '@/components/ui/button'
+import type {
+  EditorSectionId,
+  ManagedProfile,
+  SectionKey,
+  ShowcaseProfile,
+} from '@/lib/profiles/editor/types'
+import { getShowcaseProfile } from '@/lib/profiles/showcase'
+import { computeCompletion } from '@/lib/profiles/editor/completion'
+import { validateIdentity } from '@/lib/profiles/editor/validation'
+import { isStorageAvailable } from '@/lib/profiles/editor/draft'
+import { useProfileDraft } from './use-profile-draft'
+import { EditorSidebar } from './editor-sidebar'
+import { ManagedProfileSelector } from './managed-profile-selector'
+import { EditorModal } from './editor-modal'
+import { OverviewPanel } from './panels/overview-panel'
+import { IdentityPanel } from './panels/identity-panel'
+import { ModulesPanel } from './panels/modules-panel'
+import { ContentPanel } from './panels/content-panel'
+import { ContactPanel } from './panels/contact-panel'
+import { SocialPanel } from './panels/social-panel'
+import { SettingsPanel } from './panels/settings-panel'
+import { PreviewPanel } from './panels/preview-panel'
 
-const MODULE_ICONS: Record<ModuleType, typeof Disc3> = {
-  mixes: Disc3,
-  videos: Video,
-  radio: Radio,
-  gallery: ImageIcon,
-  gigs: CalendarDays,
+type SaveState = 'idle' | 'saving' | 'saved' | 'error'
+
+interface Props {
+  profiles: ManagedProfile[]
+  initialProfile: ShowcaseProfile
 }
 
-const MODULE_ORDER: ModuleType[] = ['mixes', 'videos', 'radio', 'gallery', 'gigs']
+export function ProfileEditor({ profiles, initialProfile }: Props) {
+  const [profile, setProfile] = useState<ShowcaseProfile>(initialProfile)
 
-let idCounter = 0
-function nextId() {
-  idCounter += 1
-  return `m_new_${Date.now()}_${idCounter}`
+  // Keying by profile.id resets all draft/editor state cleanly on switch.
+  return (
+    <EditorInner
+      key={profile.id}
+      profile={profile}
+      profiles={profiles}
+      onSwitchProfile={setProfile}
+    />
+  )
 }
 
-export function ProfileEditor({ initialProfile }: { initialProfile: Profile }) {
-  const [profile, setProfile] = useState<Profile>(initialProfile)
-  const [mobileView, setMobileView] = useState<'edit' | 'preview'>('edit')
+function EditorInner({
+  profile,
+  profiles,
+  onSwitchProfile,
+}: {
+  profile: ShowcaseProfile
+  profiles: ManagedProfile[]
+  onSwitchProfile: (p: ShowcaseProfile) => void
+}) {
+  const { draft, dirty, savedAt, update, save, discard, resetToExample } = useProfileDraft(profile)
 
-  function updateIdentity(patch: Partial<Pick<Profile, 'displayName' | 'bio' | 'location'>>) {
-    setProfile((p) => ({ ...p, ...patch }))
-  }
+  const [section, setSection] = useState<EditorSectionId>('overview')
+  const [focusModule, setFocusModule] = useState<SectionKey | null>(null)
+  const [showPreviewOverlay, setShowPreviewOverlay] = useState(false)
+  const [saveState, setSaveState] = useState<SaveState>('idle')
+  const [pendingProfile, setPendingProfile] = useState<ManagedProfile | null>(null)
+  const [resetOpen, setResetOpen] = useState(false)
+  const [storageWarned, setStorageWarned] = useState(false)
 
-  function addModule(type: ModuleType) {
-    setProfile((p) => ({
-      ...p,
-      modules: [...p.modules, createEmptyModule(type, nextId())],
-    }))
-  }
+  const errors = useMemo(() => validateIdentity(draft), [draft])
+  const completion = useMemo(() => computeCompletion(draft), [draft])
 
-  function removeModule(id: string) {
-    setProfile((p) => ({ ...p, modules: p.modules.filter((m) => m.id !== id) }))
-  }
+  useEffect(() => {
+    if (!isStorageAvailable()) setStorageWarned(true)
+  }, [])
 
-  function toggleHidden(id: string) {
-    setProfile((p) => ({
-      ...p,
-      modules: p.modules.map((m) => (m.id === id ? { ...m, hidden: !m.hidden } : m)),
-    }))
-  }
+  // Warn before unloading with unsaved changes.
+  useEffect(() => {
+    function beforeUnload(e: BeforeUnloadEvent) {
+      if (!dirty) return
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', beforeUnload)
+    return () => window.removeEventListener('beforeunload', beforeUnload)
+  }, [dirty])
 
-  function updateTitle(id: string, title: string) {
-    setProfile((p) => ({
-      ...p,
-      modules: p.modules.map((m) => (m.id === id ? { ...m, title } : m)),
-    }))
-  }
+  const handleSave = useCallback(() => {
+    setSaveState('saving')
+    setTimeout(() => {
+      const ok = save()
+      setSaveState(ok ? 'saved' : 'error')
+      setTimeout(() => setSaveState('idle'), 2200)
+    }, 250)
+  }, [save])
 
-  function moveModule(index: number, dir: -1 | 1) {
-    setProfile((p) => {
-      const target = index + dir
-      if (target < 0 || target >= p.modules.length) return p
-      const modules = [...p.modules]
-      ;[modules[index], modules[target]] = [modules[target], modules[index]]
-      return { ...p, modules }
-    })
-  }
+  const navigate = useCallback((s: EditorSectionId) => {
+    setSection(s)
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [])
 
-  const visibleModules = profile.modules.filter((m) => !m.hidden)
+  const editModule = useCallback((key: SectionKey) => {
+    setFocusModule(key)
+    setSection('content')
+  }, [])
+
+  const doSwitch = useCallback(
+    (next: ManagedProfile) => {
+      const full = getShowcaseProfile(next.slug)
+      if (full) onSwitchProfile(full)
+      setPendingProfile(null)
+    },
+    [onSwitchProfile],
+  )
+
+  const requestSwitch = useCallback(
+    (next: ManagedProfile) => {
+      if (dirty) setPendingProfile(next)
+      else doSwitch(next)
+    },
+    [dirty, doSwitch],
+  )
 
   return (
-    <div className="mx-auto w-full max-w-7xl px-4 pb-24 pt-6 sm:px-6">
-      {/* Top bar */}
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <Button
-            nativeButton={false}
-            render={<Link href={`/profile/${profile.slug}`} />}
-            variant="ghost"
-            size="sm"
-          >
-            <ArrowLeft className="size-4" aria-hidden="true" />
-            Back to profile
-          </Button>
+    <div className="mx-auto max-w-[100rem] px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mb-6 flex flex-col gap-4 rounded-2xl border border-border bg-card/60 p-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <ManagedProfileSelector
+            profiles={profiles}
+            selectedId={draft.profileId}
+            isPublic={draft.settings.isPublic}
+            onSelect={requestSwitch}
+          />
+          <SaveStatus dirty={dirty} savedAt={savedAt} saveState={saveState} />
         </div>
-        <div className="flex items-center gap-2">
-          <Badge variant="secondary" className="hidden sm:inline-flex">
-            Draft — not saved
-          </Badge>
-          <Button size="sm" disabled title="Saving requires the database, coming soon">
-            Save changes
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="ghost" size="sm" nativeButton={false} render={<Link href={`/p/${draft.slug}`} target="_blank" />}>
+            <ExternalLink className="size-4" /> View public profile
+          </Button>
+          <Button variant="outline" size="sm" className="xl:hidden" onClick={() => setShowPreviewOverlay(true)}>
+            <Eye className="size-4" /> Preview
+          </Button>
+          {dirty ? (
+            <Button variant="ghost" size="sm" onClick={discard}>
+              <RotateCcw className="size-4" /> Discard
+            </Button>
+          ) : null}
+          <Button size="sm" onClick={handleSave} disabled={saveState === 'saving'}>
+            {saveState === 'saving' ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+            Save draft
           </Button>
         </div>
       </div>
 
-      {/* Mobile edit/preview toggle */}
-      <div className="mb-5 grid grid-cols-2 gap-1 rounded-lg border border-border/70 bg-card p-1 lg:hidden">
-        <button
-          type="button"
-          onClick={() => setMobileView('edit')}
-          className={cn(
-            'inline-flex items-center justify-center gap-2 rounded-md py-2 text-sm font-medium transition-colors',
-            mobileView === 'edit'
-              ? 'bg-primary text-primary-foreground'
-              : 'text-muted-foreground hover:text-foreground',
-          )}
-          aria-pressed={mobileView === 'edit'}
-        >
-          <Pencil className="size-4" aria-hidden="true" />
-          Edit
-        </button>
-        <button
-          type="button"
-          onClick={() => setMobileView('preview')}
-          className={cn(
-            'inline-flex items-center justify-center gap-2 rounded-md py-2 text-sm font-medium transition-colors',
-            mobileView === 'preview'
-              ? 'bg-primary text-primary-foreground'
-              : 'text-muted-foreground hover:text-foreground',
-          )}
-          aria-pressed={mobileView === 'preview'}
-        >
-          <Eye className="size-4" aria-hidden="true" />
-          Preview
-        </button>
-      </div>
+      {storageWarned ? (
+        <p className="mb-4 flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-300">
+          <Info className="size-4 shrink-0" />
+          Local storage is unavailable, so drafts can&apos;t be saved on this device. You can still edit and preview.
+        </p>
+      ) : null}
 
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        {/* Editor column */}
-        <div className={cn('flex-col gap-6', mobileView === 'edit' ? 'flex' : 'hidden', 'lg:flex')}>
-          {/* Identity */}
-          <section className="flex flex-col gap-4 rounded-xl border border-border/70 bg-card p-5">
-            <h2 className="font-display text-lg font-bold text-foreground">Profile details</h2>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="displayName">Display name</Label>
-              <Input
-                id="displayName"
-                value={profile.displayName}
-                onChange={(e) => updateIdentity({ displayName: e.target.value })}
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="location">Location</Label>
-              <Input
-                id="location"
-                value={profile.location}
-                onChange={(e) => updateIdentity({ location: e.target.value })}
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="bio">Bio</Label>
-              <Textarea
-                id="bio"
-                rows={4}
-                value={profile.bio}
-                onChange={(e) => updateIdentity({ bio: e.target.value })}
-              />
-            </div>
-          </section>
-
-          {/* Modules manager */}
-          <section className="flex flex-col gap-4">
-            <div className="flex items-center gap-2">
-              <LayoutGrid className="size-5 text-primary" aria-hidden="true" />
-              <h2 className="font-display text-lg font-bold text-foreground">Modules</h2>
-              <span className="text-sm text-muted-foreground">({profile.modules.length})</span>
-            </div>
-
-            {profile.modules.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-border/70 bg-card/40 px-5 py-8 text-center text-sm text-muted-foreground">
-                No modules yet. Add one below to start building your profile.
-              </div>
-            ) : (
-              <ul className="flex flex-col gap-3">
-                {profile.modules.map((module, index) => (
-                  <ModuleEditorCard
-                    key={module.id}
-                    module={module}
-                    index={index}
-                    total={profile.modules.length}
-                    onMove={moveModule}
-                    onToggleHidden={toggleHidden}
-                    onRemove={removeModule}
-                    onTitleChange={updateTitle}
-                  />
-                ))}
-              </ul>
-            )}
-
-            {/* Add module */}
-            <div className="flex flex-col gap-3 rounded-xl border border-border/70 bg-card p-5">
-              <div className="flex items-center gap-2">
-                <Plus className="size-4 text-primary" aria-hidden="true" />
-                <h3 className="font-semibold text-foreground">Add a module</h3>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Modules are optional and reusable — add as many as you need, in any order.
-              </p>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {MODULE_ORDER.map((type) => {
-                  const Icon = MODULE_ICONS[type]
-                  return (
-                    <button
-                      key={type}
-                      type="button"
-                      onClick={() => addModule(type)}
-                      className="flex flex-col items-start gap-1 rounded-lg border border-border/70 bg-background p-3 text-left transition-colors hover:border-primary/60 hover:bg-primary/5"
-                    >
-                      <span className="inline-flex items-center gap-2 font-medium text-foreground">
-                        <Icon className="size-4 text-primary" aria-hidden="true" />
-                        {MODULE_META[type].label}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {MODULE_META[type].description}
-                      </span>
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          </section>
+      <div className="grid gap-6 lg:grid-cols-[13rem_minmax(0,1fr)] xl:grid-cols-[13rem_minmax(0,34rem)_minmax(0,1fr)]">
+        <div>
+          <EditorSidebar active={section} onSelect={navigate} completion={completion.percent} />
         </div>
 
-        {/* Preview column */}
-        <div className={cn(mobileView === 'preview' ? 'block' : 'hidden', 'lg:block')}>
-          <div className="lg:sticky lg:top-6">
-            <div className="mb-3 flex items-center gap-2 text-sm font-medium text-muted-foreground">
-              <Eye className="size-4" aria-hidden="true" />
-              Live preview
-            </div>
-            <div className="overflow-hidden rounded-2xl border border-border/70 bg-background p-4 sm:p-6">
-              <ProfileHeader profile={profile} />
-              <div className="mt-8 flex flex-col gap-10">
-                {visibleModules.length === 0 ? (
-                  <p className="rounded-xl border border-dashed border-border/70 bg-card/40 px-5 py-8 text-center text-sm text-muted-foreground">
-                    All modules are hidden. Toggle one on to see it here.
-                  </p>
-                ) : (
-                  visibleModules.map((module) => <ModuleView key={module.id} module={module} />)
-                )}
+        <div className="min-w-0">
+          {section === 'overview' ? (
+            <OverviewPanel draft={draft} completion={completion} onNavigate={navigate} />
+          ) : null}
+          {section === 'identity' ? <IdentityPanel draft={draft} errors={errors} update={update} /> : null}
+          {section === 'modules' ? <ModulesPanel draft={draft} update={update} onEditModule={editModule} /> : null}
+          {section === 'content' ? (
+            <ContentPanel
+              draft={draft}
+              update={update}
+              focusModule={focusModule}
+              onFocusHandled={() => setFocusModule(null)}
+            />
+          ) : null}
+          {section === 'contact' ? <ContactPanel draft={draft} errors={errors} update={update} /> : null}
+          {section === 'social' ? <SocialPanel draft={draft} errors={errors} update={update} /> : null}
+          {section === 'settings' ? (
+            <SettingsPanel draft={draft} update={update} onResetToExample={() => setResetOpen(true)} />
+          ) : null}
+          {section === 'preview' ? (
+            <>
+              <div className="overflow-hidden rounded-2xl border border-border bg-card xl:hidden">
+                <div className="h-[70dvh]">
+                  <PreviewPanel draft={draft} />
+                </div>
               </div>
-            </div>
+              <div className="hidden rounded-2xl border border-border bg-muted/30 p-8 text-center text-sm text-muted-foreground xl:block">
+                The live preview is always visible in the panel on the right.
+              </div>
+            </>
+          ) : null}
+        </div>
+
+        <div className="hidden xl:block">
+          <div className="sticky top-6 h-[calc(100dvh-3.5rem)] overflow-hidden rounded-2xl border border-border bg-card">
+            <PreviewPanel draft={draft} />
           </div>
         </div>
       </div>
+
+      <EditorModal
+        open={showPreviewOverlay}
+        onClose={() => setShowPreviewOverlay(false)}
+        title="Live preview"
+        description="How your draft appears on the public profile."
+        size="xl"
+      >
+        <div className="h-[75dvh] overflow-hidden rounded-xl border border-border">
+          <PreviewPanel draft={draft} bare />
+        </div>
+      </EditorModal>
+
+      <EditorModal
+        open={Boolean(pendingProfile)}
+        onClose={() => setPendingProfile(null)}
+        title="Unsaved changes"
+        description={`You have unsaved edits to ${draft.base.displayName}.`}
+        size="md"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setPendingProfile(null)}>
+              Keep editing
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                save()
+                if (pendingProfile) doSwitch(pendingProfile)
+              }}
+            >
+              <Save className="size-4" /> Save &amp; switch
+            </Button>
+            <Button onClick={() => pendingProfile && doSwitch(pendingProfile)}>Switch anyway</Button>
+          </>
+        }
+      >
+        <p className="text-sm text-muted-foreground">
+          Save your draft to this device first, or switch anyway and return to it later this session.
+        </p>
+      </EditorModal>
+
+      <EditorModal
+        open={resetOpen}
+        onClose={() => setResetOpen(false)}
+        title="Reset to original example?"
+        description="This discards all local edits for this profile and restores the original example content."
+        size="md"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setResetOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="outline"
+              className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+              onClick={() => {
+                resetToExample()
+                setResetOpen(false)
+                navigate('overview')
+              }}
+            >
+              <RotateCcw className="size-4" /> Reset profile
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-muted-foreground">This cannot be undone.</p>
+      </EditorModal>
     </div>
   )
 }
 
-function ModuleEditorCard({
-  module,
-  index,
-  total,
-  onMove,
-  onToggleHidden,
-  onRemove,
-  onTitleChange,
-}: {
-  module: ProfileModule
-  index: number
-  total: number
-  onMove: (index: number, dir: -1 | 1) => void
-  onToggleHidden: (id: string) => void
-  onRemove: (id: string) => void
-  onTitleChange: (id: string, title: string) => void
-}) {
-  const Icon = MODULE_ICONS[module.type]
+function SaveStatus({ dirty, savedAt, saveState }: { dirty: boolean; savedAt: string | null; saveState: SaveState }) {
+  let text = 'All changes saved'
+  if (saveState === 'saving') text = 'Saving…'
+  else if (saveState === 'saved') text = 'Draft saved'
+  else if (saveState === 'error') text = 'Could not save'
+  else if (dirty) text = 'Unsaved changes'
+  else if (!savedAt) text = 'No local draft yet'
+
+  const tone =
+    saveState === 'error'
+      ? 'text-destructive'
+      : dirty && saveState === 'idle'
+        ? 'text-amber-600 dark:text-amber-400'
+        : 'text-muted-foreground'
+
   return (
-    <li
-      className={cn(
-        'flex flex-col gap-3 rounded-xl border bg-card p-4 transition-opacity',
-        module.hidden ? 'border-border/50 opacity-60' : 'border-border/70',
-      )}
-    >
-      <div className="flex items-center gap-3">
-        <GripVertical className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-        <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
-          <Icon className="size-4.5" aria-hidden="true" />
-        </span>
-        <div className="flex min-w-0 flex-1 flex-col">
-          <Input
-            aria-label={`${MODULE_META[module.type].label} module title`}
-            value={module.title}
-            onChange={(e) => onTitleChange(module.id, e.target.value)}
-            className="h-8 border-transparent bg-transparent px-0 text-base font-semibold shadow-none focus-visible:border-input focus-visible:bg-background focus-visible:px-3"
-          />
-          <span className="text-xs text-muted-foreground">{MODULE_META[module.type].label}</span>
-        </div>
-      </div>
-
-      <div className="flex items-center justify-between gap-2 border-t border-border/60 pt-3">
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => onMove(index, -1)}
-            disabled={index === 0}
-            aria-label="Move module up"
-          >
-            <ArrowUp className="size-4" aria-hidden="true" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => onMove(index, 1)}
-            disabled={index === total - 1}
-            aria-label="Move module down"
-          >
-            <ArrowDown className="size-4" aria-hidden="true" />
-          </Button>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
-            {module.hidden ? (
-              <EyeOff className="size-4" aria-hidden="true" />
-            ) : (
-              <Eye className="size-4" aria-hidden="true" />
-            )}
-            <span className="hidden sm:inline">{module.hidden ? 'Hidden' : 'Visible'}</span>
-            <Switch
-              checked={!module.hidden}
-              onCheckedChange={() => onToggleHidden(module.id)}
-              aria-label={module.hidden ? 'Show module' : 'Hide module'}
-            />
-          </label>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => onRemove(module.id)}
-            aria-label="Remove module"
-            className="text-muted-foreground hover:text-destructive"
-          >
-            <Trash2 className="size-4" aria-hidden="true" />
-          </Button>
-        </div>
-      </div>
-    </li>
+    <span className={cn('inline-flex items-center gap-1.5 text-xs font-medium', tone)}>
+      {saveState === 'saved' ? <Check className="size-3.5" /> : null}
+      {text}
+    </span>
   )
 }
