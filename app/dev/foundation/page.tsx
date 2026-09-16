@@ -1,5 +1,6 @@
-import { redirect } from "next/navigation"
+import { notFound, redirect } from "next/navigation"
 
+import { IS_PRODUCTION } from "@/lib/env"
 import { createClient } from "@/lib/supabase/server"
 import {
   getModuleDefinitions,
@@ -20,6 +21,13 @@ type Check = { label: string; ok: boolean; detail: string }
 const SEARCH_ORIGIN = { lat: 53.4808, lon: -2.2426, radiusKm: 250 }
 
 export default async function FoundationPage() {
+  // This diagnostic page must not exist in Production. Returning a real 404
+  // (not a redirect) keeps its existence undiscoverable there, while Preview
+  // and Development keep it behind the auth check below.
+  if (IS_PRODUCTION) {
+    notFound()
+  }
+
   const supabase = await createClient()
   const {
     data: { user },
@@ -81,7 +89,7 @@ export default async function FoundationPage() {
         </div>
         <div className="flex flex-col items-end gap-3">
           <SignOutButton />
-          <SeedButton />
+          {IS_PRODUCTION ? null : <SeedButton />}
         </div>
       </header>
 

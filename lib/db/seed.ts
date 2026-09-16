@@ -2,6 +2,8 @@ import "server-only"
 
 import { createClient as createServiceClient } from "@supabase/supabase-js"
 
+import { IS_PRODUCTION } from "@/lib/env"
+
 import { SHOWCASE_PROFILES } from "@/lib/profiles/showcase"
 import type { ShowcaseProfile, ShowcaseType } from "@/lib/profiles/showcase"
 import { allowedModuleKeys, moduleDef, moduleLabel } from "@/lib/profiles/editor/module-registry"
@@ -162,6 +164,12 @@ export interface SeedResult {
 }
 
 export async function runSeed(): Promise<SeedResult> {
+  // Final defense-in-depth guard: the demo seed must never run in Production,
+  // regardless of how execution reached here.
+  if (IS_PRODUCTION) {
+    throw new Error("The demo seed is disabled in production.")
+  }
+
   const sb = serviceClient()
   const ownerId = await ensureDemoOwner(sb)
   const results = []
