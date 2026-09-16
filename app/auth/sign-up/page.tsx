@@ -42,7 +42,10 @@ export default function SignUpPage() {
       return
     }
 
-    router.push(`/auth/sign-up-success?email=${encodeURIComponent(email)}`)
+    // Do not carry the email in the URL (it would persist in browser history,
+    // referrer headers and server access logs). The resend screen collects it
+    // again if the user needs another confirmation link.
+    router.push("/auth/sign-up-success")
   }
 
   return (
