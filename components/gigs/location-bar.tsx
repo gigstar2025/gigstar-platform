@@ -184,7 +184,9 @@ export function LocationBar({
             </Label>
             <Select
               value={String(radius)}
-              onValueChange={handleRadiusChange}
+              onValueChange={(value) => {
+                if (value !== null) handleRadiusChange(value)
+              }}
               disabled={label === null || isPending}
             >
               <SelectTrigger id="radius" className="h-9 w-[110px]" aria-label="Search radius">
