@@ -9,7 +9,7 @@ import {
 } from "@/lib/db/foundation"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { SignOutButton } from "./sign-out-button"
+import { SignOutButton } from "@/components/auth/sign-out-button"
 import { SeedButton } from "./seed-button"
 
 export const dynamic = "force-dynamic"
