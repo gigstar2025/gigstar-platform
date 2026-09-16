@@ -52,7 +52,7 @@ export function DevLocationControl({
         <div className="flex items-center gap-2">
           <Select
             value={current ?? ''}
-            onValueChange={simulate}
+            onValueChange={(value) => simulate(value ?? '')}
             disabled={isPending}
           >
             <SelectTrigger className="h-9 w-[190px]" aria-label="Simulate detected town">
