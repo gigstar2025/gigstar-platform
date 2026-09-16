@@ -7,6 +7,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 
 import { createClient } from "@/lib/supabase/client"
+import { GENERIC_CREDENTIALS_ERROR } from "@/lib/auth/errors"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -28,13 +29,15 @@ export default function LoginPage() {
     const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
 
     if (signInError) {
-      setError("Invalid email or password.")
+      setError(GENERIC_CREDENTIALS_ERROR)
       setIsLoading(false)
       return
     }
 
-    router.push("/dev/foundation")
-    router.refresh()
+    // Hard navigation to the central post-login hub, which reads the fresh
+    // session cookies server-side and resolves the real destination. Replaces
+    // the old hardcoded /dev/foundation target (404 in Production).
+    window.location.assign("/auth/post-login")
   }
 
   return (
