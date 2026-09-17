@@ -31,7 +31,6 @@ comment on function public.max_active_profiles_per_account() is
   'Canonical limit: maximum active (non-archived) profiles per account. Single source of truth — change the literal here to adjust.';
 
 revoke all on function public.max_active_profiles_per_account() from public;
-revoke all on function public.max_active_profiles_per_account() from anon;
 grant execute on function public.max_active_profiles_per_account() to authenticated;
 
 -- ===========================================================================
@@ -170,7 +169,6 @@ comment on function public.slug_available(text) is
   'Boolean-only slug availability probe (normalized, validated, reserved-word + history aware). Reveals no profile data. Unique constraint is the final race guard.';
 
 revoke all on function public.slug_available(text) from public;
-revoke all on function public.slug_available(text) from anon;
 grant execute on function public.slug_available(text) to authenticated;
 
 -- ===========================================================================
@@ -207,7 +205,6 @@ comment on function public.start_profile_creation_attempt() is
   'Mint a server-side profile-creation idempotency key for the caller. Returns the attempt id used by create_profile().';
 
 revoke all on function public.start_profile_creation_attempt() from public;
-revoke all on function public.start_profile_creation_attempt() from anon;
 grant execute on function public.start_profile_creation_attempt() to authenticated;
 
 -- ===========================================================================
@@ -251,7 +248,6 @@ comment on function public.set_onboarding_step(public.onboarding_step, uuid) is
   'Owner-scoped upsert of onboarding progress. Validates attempt ownership.';
 
 revoke all on function public.set_onboarding_step(public.onboarding_step, uuid) from public;
-revoke all on function public.set_onboarding_step(public.onboarding_step, uuid) from anon;
 grant execute on function public.set_onboarding_step(public.onboarding_step, uuid) to authenticated;
 
 -- ===========================================================================
@@ -295,7 +291,6 @@ comment on function public.set_default_profile(uuid) is
   'Set the caller''s default profile after confirming active membership and that the profile is not archived/deleted.';
 
 revoke all on function public.set_default_profile(uuid) from public;
-revoke all on function public.set_default_profile(uuid) from anon;
 grant execute on function public.set_default_profile(uuid) to authenticated;
 
 -- ===========================================================================
@@ -332,7 +327,6 @@ comment on function public.resolve_default_profile() is
   'Return the caller''s default profile id if still valid (active membership, not archived/deleted), else NULL. No side effects.';
 
 revoke all on function public.resolve_default_profile() from public;
-revoke all on function public.resolve_default_profile() from anon;
 grant execute on function public.resolve_default_profile() to authenticated;
 
 -- ===========================================================================
@@ -465,7 +459,6 @@ comment on function public.create_profile(uuid, text, public.profile_type, text,
   'Atomic, retry-safe profile creation keyed by a server-issued attempt id. Enforces the active-profile limit, starts hidden/draft, sets the account default when none valid. Never sets location_exact.';
 
 revoke all on function public.create_profile(uuid, text, public.profile_type, text, text, text, double precision, double precision) from public;
-revoke all on function public.create_profile(uuid, text, public.profile_type, text, text, text, double precision, double precision) from anon;
 grant execute on function public.create_profile(uuid, text, public.profile_type, text, text, text, double precision, double precision) to authenticated;
 
 -- ===========================================================================
@@ -476,5 +469,4 @@ grant execute on function public.create_profile(uuid, text, public.profile_type,
 --     unchanged.
 -- ===========================================================================
 revoke all on function public.create_profile_with_owner(text, public.profile_type, text, text) from public;
-revoke all on function public.create_profile_with_owner(text, public.profile_type, text, text) from anon;
 grant execute on function public.create_profile_with_owner(text, public.profile_type, text, text) to authenticated;
