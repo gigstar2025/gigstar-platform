@@ -24,6 +24,34 @@ export type MembershipStatus = "active" | "inactive" | "removed"
 
 export type InvitationStatus = "pending" | "accepted" | "declined" | "expired" | "revoked"
 
+// Phase Six (migration 0011) — multi-profile onboarding foundation.
+export type ProfileCreationStatus = "pending" | "completed" | "failed"
+
+export type OnboardingStep = "type" | "details" | "handle" | "review" | "completed"
+
+// Row shape of public.profile_creation_attempts (idempotency ledger).
+// The client has SELECT-own only; all writes go through SECURITY DEFINER RPCs.
+export interface ProfileCreationAttempt {
+  id: string
+  user_id: string
+  status: ProfileCreationStatus
+  created_profile_id: string | null
+  requested_slug: string | null
+  requested_type: ProfileType | null
+  created_at: string
+  updated_at: string
+  completed_at: string | null
+}
+
+// Row shape of public.onboarding_state (one row per account, resumable).
+export interface OnboardingState {
+  user_id: string
+  current_step: OnboardingStep
+  active_attempt_id: string | null
+  created_at: string
+  updated_at: string
+}
+
 export interface ModuleDefinition {
   key: string
   label: string
