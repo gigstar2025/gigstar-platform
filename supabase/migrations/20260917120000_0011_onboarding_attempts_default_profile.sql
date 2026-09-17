@@ -455,11 +455,11 @@ begin
   return v_profile_id;
 end;
 $$;
-comment on function public.create_profile(uuid, text, public.profile_type, text, text, double precision, double precision) is
+comment on function public.create_profile(uuid, text, public.profile_type, text, text, text, double precision, double precision) is
   'Atomic, retry-safe profile creation keyed by a server-issued attempt id. Enforces the active-profile limit, starts hidden/draft, sets the account default when none valid. Never sets location_exact.';
 
-revoke all on function public.create_profile(uuid, text, public.profile_type, text, text, double precision, double precision) from public;
-grant execute on function public.create_profile(uuid, text, public.profile_type, text, text, double precision, double precision) to authenticated;
+revoke all on function public.create_profile(uuid, text, public.profile_type, text, text, text, double precision, double precision) from public;
+grant execute on function public.create_profile(uuid, text, public.profile_type, text, text, text, double precision, double precision) to authenticated;
 
 -- ===========================================================================
 -- 12. Harden the underlying helper: create_profile_with_owner is now an
