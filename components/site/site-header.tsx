@@ -25,9 +25,18 @@ const PROFILE_EXAMPLES = [
   { label: 'Event organiser profile', href: '/p/nightform' },
 ]
 
+// Account entry points. These route to authenticated, server-guarded pages —
+// an unauthenticated visitor who follows them is redirected to sign in — so
+// the links are safe to render statically without the header knowing the user.
+const ACCOUNT_LINKS = [
+  { label: 'Your profiles', href: '/profiles/manage' },
+  { label: 'Create a profile', href: '/onboarding' },
+]
+
 export function SiteHeader() {
   const [open, setOpen] = useState(false)
   const [examplesOpen, setExamplesOpen] = useState(false)
+  const [accountOpen, setAccountOpen] = useState(false)
 
   return (
     <header className="sticky top-0 z-50 border-b border-border/60 bg-background/80 backdrop-blur-xl">
@@ -81,6 +90,41 @@ export function SiteHeader() {
               </>
             )}
           </div>
+
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setAccountOpen((v) => !v)}
+              aria-expanded={accountOpen}
+              className="flex items-center gap-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+            >
+              Account
+              <ChevronDown className={cn('size-4 transition-transform', accountOpen && 'rotate-180')} />
+            </button>
+            {accountOpen && (
+              <>
+                <button
+                  type="button"
+                  aria-hidden
+                  tabIndex={-1}
+                  className="fixed inset-0 z-40 cursor-default"
+                  onClick={() => setAccountOpen(false)}
+                />
+                <div className="absolute right-0 top-full z-50 mt-2 w-56 rounded-xl border border-border/60 bg-card p-1.5 shadow-lg">
+                  {ACCOUNT_LINKS.map((link) => (
+                    <a
+                      key={link.href}
+                      href={link.href}
+                      onClick={() => setAccountOpen(false)}
+                      className="block rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    >
+                      {link.label}
+                    </a>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         </nav>
 
         <div className="hidden items-center gap-2 lg:flex">
@@ -119,6 +163,20 @@ export function SiteHeader() {
               Profile examples
             </p>
             {PROFILE_EXAMPLES.map((link) => (
+              <a
+                key={link.href}
+                href={link.href}
+                onClick={() => setOpen(false)}
+                className="rounded-md px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              >
+                {link.label}
+              </a>
+            ))}
+
+            <p className="mt-3 px-3 pb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Account
+            </p>
+            {ACCOUNT_LINKS.map((link) => (
               <a
                 key={link.href}
                 href={link.href}
