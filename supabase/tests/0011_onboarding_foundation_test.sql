@@ -444,41 +444,36 @@ begin
     select tgenabled = 'O' into v_bool from pg_trigger where tgname = 'trg_protect_last_owner';
 
     -- (b) deleting the sole owner must fail
-    declare v_blocked_sole boolean := false;
     begin
-      begin
-        delete from public.profile_memberships where profile_id = v_p3 and user_id = v_a;
-        v_blocked_sole := false;
-      exception when others then
-        v_blocked_sole := (sqlstate = '23514');
-      end;
-
-      -- (c) with a second active owner present, removing the first is allowed
-      insert into public.profile_memberships (profile_id, user_id, role, status)
-        values (v_p3, v_b, 'owner', 'active');
-      declare v_allowed_nonlast boolean := false;
-      begin
-        delete from public.profile_memberships where profile_id = v_p3 and user_id = v_a;
-        v_allowed_nonlast := true;
-      exception when others then
-        v_allowed_nonlast := false;
-      end;
-
-      -- (d) removing the now-final owner must fail again
-      declare v_blocked_last boolean := false;
-      begin
-        delete from public.profile_memberships where profile_id = v_p3 and user_id = v_b;
-        v_blocked_last := false;
-      exception when others then
-        v_blocked_last := (sqlstate = '23514');
-      end;
-
-      insert into hb_test_results values (
-        20, 'trigger', 'trg_protect_last_owner enabled and enforces last-owner protection',
-        coalesce(v_bool, false) and v_blocked_sole and v_allowed_nonlast and v_blocked_last,
-        format('enabled=%s block_sole=%s allow_nonlast=%s block_last=%s',
-          v_bool, v_blocked_sole, v_allowed_nonlast, v_blocked_last));
+      delete from public.profile_memberships where profile_id = v_p3 and user_id = v_a;
+      v_blocked_sole := false;
+    exception when others then
+      v_blocked_sole := (sqlstate = '23514');
     end;
+
+    -- (c) with a second active owner present, removing the first is allowed
+    insert into public.profile_memberships (profile_id, user_id, role, status)
+      values (v_p3, v_b, 'owner', 'active');
+    begin
+      delete from public.profile_memberships where profile_id = v_p3 and user_id = v_a;
+      v_allowed_nonlast := true;
+    exception when others then
+      v_allowed_nonlast := false;
+    end;
+
+    -- (d) removing the now-final owner must fail again
+    begin
+      delete from public.profile_memberships where profile_id = v_p3 and user_id = v_b;
+      v_blocked_last := false;
+    exception when others then
+      v_blocked_last := (sqlstate = '23514');
+    end;
+
+    insert into hb_test_results values (
+      20, 'trigger', 'trg_protect_last_owner enabled and enforces last-owner protection',
+      coalesce(v_bool, false) and v_blocked_sole and v_allowed_nonlast and v_blocked_last,
+      format('enabled=%s block_sole=%s allow_nonlast=%s block_last=%s',
+        v_bool, v_blocked_sole, v_allowed_nonlast, v_blocked_last));
   exception when others then
     insert into hb_test_results values (20, 'trigger',
       'trg_protect_last_owner enabled and enforces last-owner protection',
