@@ -5,7 +5,9 @@
 -- shipped in migration 0013 (archive_profile), exercised against the profile /
 -- membership / default-profile foundation from 0002/0004/0006/0011.
 --
--- It runs 13 checks across: ownership enforcement, cross-account isolation,
+-- It runs 20 checks across: ownership enforcement, cross-account isolation,
+-- EXACT-owner authorization (every same-profile non-owner role is denied, an
+-- inactive owner is denied, and the true owner is allowed on the same target),
 -- last-active-profile protection, atomic default reassignment, replacement
 -- validation, archived-from-active-count exclusion, public-view exclusion,
 -- membership/history preservation, grant posture, and the preserved
@@ -86,6 +88,9 @@ declare
   v_bool2 boolean;
   v_int   integer;
   v_ok    boolean;
+  v_p5    uuid;   -- A: fresh active, non-default target for the exact-owner checks
+  v_seq   integer;
+  v_role  text;
 begin
   -- =========================================================================
   -- SETUP: two generated login accounts + four owned profiles for A, one
@@ -336,6 +341,84 @@ begin
   exception when others then
     insert into hb_test_results values (13, 'trigger',
       'trg_protect_last_owner remains enabled and enforces last-owner protection',
+      false, 'unexpected error ' || sqlstate || ': ' || sqlerrm);
+  end;
+
+  -- =========================================================================
+  -- EXACT-OWNER AUTHORIZATION (archival requires the role to be EXACTLY owner)
+  -- -------------------------------------------------------------------------
+  -- The authorization gate fires BEFORE any lifecycle/default/last-active
+  -- check, so a fresh active, non-default profile of A's stays a valid
+  -- archival target throughout these checks: the ONLY thing that changes the
+  -- outcome is the caller's role on that exact profile.
+  -- =========================================================================
+  perform set_config('request.jwt.claims', json_build_object('sub', v_a::text)::text, true);
+  v_p5 := public.create_profile(public.start_profile_creation_attempt(), v_run || '-5', 'dj', 'Harness Five');
+
+  -- 14-18. Every same-profile NON-OWNER role (active membership) is denied.
+  v_seq := 14;
+  foreach v_role in array array['administrator','editor','event_manager','content_contributor','analyst']
+  loop
+    insert into public.profile_memberships (profile_id, user_id, role, status)
+    values (v_p5, v_b, v_role::public.membership_role, 'active')
+    on conflict (profile_id, user_id)
+    do update set role = excluded.role, status = 'active';
+
+    perform set_config('request.jwt.claims', json_build_object('sub', v_b::text)::text, true);
+    begin
+      perform public.archive_profile(v_p5);
+      insert into hb_test_results values (v_seq, 'exact-owner',
+        format('a same-profile %s member cannot archive (owner-only)', v_role),
+        false, 'expected exception, none raised');
+    exception when others then
+      insert into hb_test_results values (v_seq, 'exact-owner',
+        format('a same-profile %s member cannot archive (owner-only)', v_role),
+        sqlstate = '42501', 'got ' || sqlstate || ': ' || sqlerrm);
+    end;
+    perform set_config('request.jwt.claims', json_build_object('sub', v_a::text)::text, true);
+    v_seq := v_seq + 1;
+  end loop;
+
+  -- 19. An INACTIVE owner membership does NOT satisfy the owner requirement.
+  begin
+    insert into public.profile_memberships (profile_id, user_id, role, status)
+    values (v_p5, v_b, 'owner', 'inactive')
+    on conflict (profile_id, user_id)
+    do update set role = 'owner', status = 'inactive';
+
+    perform set_config('request.jwt.claims', json_build_object('sub', v_b::text)::text, true);
+    begin
+      perform public.archive_profile(v_p5);
+      insert into hb_test_results values (19, 'exact-owner',
+        'an inactive owner membership cannot archive',
+        false, 'expected exception, none raised');
+    exception when others then
+      insert into hb_test_results values (19, 'exact-owner',
+        'an inactive owner membership cannot archive',
+        sqlstate = '42501', 'got ' || sqlstate || ': ' || sqlerrm);
+    end;
+    perform set_config('request.jwt.claims', json_build_object('sub', v_a::text)::text, true);
+  exception when others then
+    insert into hb_test_results values (19, 'exact-owner',
+      'an inactive owner membership cannot archive',
+      false, 'unexpected error ' || sqlstate || ': ' || sqlerrm);
+  end;
+
+  -- 20. POSITIVE CONTROL: the true active owner (A) CAN archive that exact
+  --     same profile — proving 14-19 fail on authorization, not on some
+  --     unrelated guard. (A still holds p2 as an active default, so p5 is
+  --     neither last-active nor the default.)
+  begin
+    v_uuid := public.archive_profile(v_p5);
+    select (lifecycle_status::text = 'archived' and archived_at is not null)
+      into v_bool from public.profiles where id = v_p5;
+    insert into hb_test_results values (20, 'exact-owner',
+      'the true active owner can archive the same profile (positive control)',
+      v_uuid = v_p5 and coalesce(v_bool, false),
+      'owner_archive_succeeded=' || coalesce(v_bool::text, 'null'));
+  exception when others then
+    insert into hb_test_results values (20, 'exact-owner',
+      'the true active owner can archive the same profile (positive control)',
       false, 'unexpected error ' || sqlstate || ': ' || sqlerrm);
   end;
 end
