@@ -8,6 +8,14 @@ import { MANAGED_PROFILES } from '@/lib/profiles/editor/demo-account'
 import { PROFILE_TYPE_OPTIONS } from '@/lib/onboarding/constants'
 import { createClient } from '@/lib/supabase/server'
 
+// This route reads cookies (Supabase session) in the DB-backed branch for
+// freshly created onboarding profiles. With generateStaticParams present, Next
+// otherwise treats the route as statically generable and throws
+// DYNAMIC_SERVER_USAGE in production when the dynamic (non-showcase) branch
+// accesses cookies. Force dynamic rendering — this is a per-user, authenticated
+// editor, so it should never be statically cached.
+export const dynamic = 'force-dynamic'
+
 export function generateStaticParams() {
   return SHOWCASE_PROFILES.map((p) => ({ slug: p.slug }))
 }
