@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Menu, X, ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -37,6 +37,19 @@ export function SiteHeader() {
   const [open, setOpen] = useState(false)
   const [examplesOpen, setExamplesOpen] = useState(false)
   const [accountOpen, setAccountOpen] = useState(false)
+  const accountTriggerRef = useRef<HTMLButtonElement>(null)
+
+  // Close the desktop Account dropdown on Escape and return focus to its
+  // trigger. Scoped to the Account container's onKeyDown so it only reacts
+  // when focus is inside that open dropdown — the mobile section and the
+  // Profile examples dropdown are unaffected.
+  const handleAccountKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Escape' && accountOpen) {
+      event.stopPropagation()
+      setAccountOpen(false)
+      accountTriggerRef.current?.focus()
+    }
+  }
 
   return (
     <header className="sticky top-0 z-50 border-b border-border/60 bg-background/80 backdrop-blur-xl">
@@ -91,8 +104,9 @@ export function SiteHeader() {
             )}
           </div>
 
-          <div className="relative">
+          <div className="relative" onKeyDown={handleAccountKeyDown}>
             <button
+              ref={accountTriggerRef}
               type="button"
               onClick={() => setAccountOpen((v) => !v)}
               aria-expanded={accountOpen}
