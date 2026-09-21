@@ -308,6 +308,13 @@ comment on function public.save_profile_module_draft(uuid, text, jsonb, integer,
 
 -- EXECUTE grants for the runtime (authenticated) role. anon gets nothing:
 -- editing always requires a session.
+-- Postgres grants EXECUTE to PUBLIC by default; revoke so anon cannot call
+-- these editor RPCs at all, then grant only to authenticated.
+revoke execute on function public.get_profile_modules_for_editor(uuid) from public;
+revoke execute on function public.save_profile_module_draft(
+  uuid, text, jsonb, integer, boolean
+) from public;
+
 grant execute on function public.get_profile_modules_for_editor(uuid) to authenticated;
 grant execute on function public.save_profile_module_draft(
   uuid, text, jsonb, integer, boolean
