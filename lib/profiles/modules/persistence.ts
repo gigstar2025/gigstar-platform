@@ -115,3 +115,22 @@ export async function saveModuleDraft(input: {
   }
   return { ok: true, moduleId: data as string }
 }
+
+export type PublishModulesResult =
+  | { ok: true; published: number }
+  | { ok: false; error: string }
+
+/**
+ * Promote every module's draft_content to published_content for a profile and
+ * record a revision snapshot. Owner-only; enforced inside the SECURITY DEFINER
+ * RPC. Returns the number of module rows that were published.
+ */
+export async function publishModules(profileId: string): Promise<PublishModulesResult> {
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc("publish_profile_modules", {
+    p_profile_id: profileId,
+  })
+
+  if (error) return { ok: false, error: error.message }
+  return { ok: true, published: (data as number | null) ?? 0 }
+}

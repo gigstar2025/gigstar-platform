@@ -9,9 +9,15 @@
 // scoped to PR-5b; the action itself is the durable foundation.
 // ---------------------------------------------------------------------------
 
+import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
 import { isModuleKey, type ModuleKey } from "./registry"
-import { saveModuleDraft, type SaveModuleResult } from "./persistence"
+import {
+  publishModules,
+  saveModuleDraft,
+  type PublishModulesResult,
+  type SaveModuleResult,
+} from "./persistence"
 
 export async function saveModuleDraftAction(input: {
   profileId: string
@@ -40,4 +46,33 @@ export async function saveModuleDraftAction(input: {
     position: input.position,
     isHidden: input.isHidden,
   })
+}
+
+/**
+ * Publish every module draft for a profile (owner only; enforced inside the
+ * RPC). When a slug is supplied, both the editor and the public page are
+ * revalidated so published changes appear immediately.
+ */
+export async function publishModulesAction(input: {
+  profileId: string
+  slug?: string
+}): Promise<PublishModulesResult> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { ok: false, error: "Authentication required" }
+  }
+
+  const result = await publishModules(input.profileId)
+
+  if (result.ok && input.slug) {
+    revalidatePath(`/p/${input.slug}`)
+    revalidatePath(`/profile/${input.slug}`)
+    revalidatePath(`/profile/${input.slug}/edit`)
+  }
+
+  return result
 }
