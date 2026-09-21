@@ -217,7 +217,7 @@ where public.profile_module_definitions.key = v.key;
 create or replace function public.get_profile_modules_for_editor(p_profile_id uuid)
 returns table (
   module_key text,
-  position integer,
+  "position" integer,
   is_hidden boolean,
   draft_content jsonb,
   published_content jsonb,
