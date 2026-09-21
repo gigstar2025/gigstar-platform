@@ -308,12 +308,14 @@ comment on function public.save_profile_module_draft(uuid, text, jsonb, integer,
 
 -- EXECUTE grants for the runtime (authenticated) role. anon gets nothing:
 -- editing always requires a session.
--- Postgres grants EXECUTE to PUBLIC by default; revoke so anon cannot call
--- these editor RPCs at all, then grant only to authenticated.
-revoke execute on function public.get_profile_modules_for_editor(uuid) from public;
+-- Postgres grants EXECUTE to PUBLIC by default, and Supabase default privileges
+-- additionally grant it directly to anon/authenticated/service_role. Revoke from
+-- PUBLIC and anon so anonymous callers cannot execute these editor RPCs at all,
+-- then grant only to authenticated.
+revoke execute on function public.get_profile_modules_for_editor(uuid) from public, anon;
 revoke execute on function public.save_profile_module_draft(
   uuid, text, jsonb, integer, boolean
-) from public;
+) from public, anon;
 
 grant execute on function public.get_profile_modules_for_editor(uuid) to authenticated;
 grant execute on function public.save_profile_module_draft(
