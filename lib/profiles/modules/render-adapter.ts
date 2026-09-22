@@ -11,7 +11,7 @@
 // bad row can never crash a public profile page.
 // ---------------------------------------------------------------------------
 
-import type { ModuleKey } from "./registry"
+import type { ModuleKey } from "./registry.ts"
 import {
   validateModuleContent,
   type AudioContent,
@@ -19,8 +19,8 @@ import {
   type GigsContent,
   type RadioContent,
   type VideosContent,
-} from "./content"
-import { MODULE_META } from "../types"
+} from "./content.ts"
+import { MODULE_META } from "../types.ts"
 import type {
   GigDate as RenderGigDate,
   GigStatus as RenderGigStatus,
