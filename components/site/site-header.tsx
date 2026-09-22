@@ -142,10 +142,12 @@ export function SiteHeader() {
         </nav>
 
         <div className="hidden items-center gap-2 lg:flex">
-          <Button variant="ghost" size="sm">
+          <Button variant="ghost" size="sm" nativeButton={false} render={<a href="/auth/login" />}>
             Log in
           </Button>
-          <Button size="sm">Get started</Button>
+          <Button size="sm" nativeButton={false} render={<a href="/auth/sign-up" />}>
+            Get started
+          </Button>
         </div>
 
         <button
@@ -202,10 +204,23 @@ export function SiteHeader() {
             ))}
 
             <div className="mt-2 flex flex-col gap-2">
-              <Button variant="outline" className="w-full">
+              <Button
+                variant="outline"
+                className="w-full"
+                nativeButton={false}
+                render={<a href="/auth/login" />}
+                onClick={() => setOpen(false)}
+              >
                 Log in
               </Button>
-              <Button className="w-full">Get started</Button>
+              <Button
+                className="w-full"
+                nativeButton={false}
+                render={<a href="/auth/sign-up" />}
+                onClick={() => setOpen(false)}
+              >
+                Get started
+              </Button>
             </div>
           </nav>
         </div>
