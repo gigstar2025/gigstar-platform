@@ -381,26 +381,42 @@ grant execute on function public.publish_profile_modules(uuid) to authenticated;
 
 -- =====================================================================
 -- Record both migrations in Supabase's migration history so future
--- tooling stays in sync. If your schema_migrations table has a NOT NULL
--- "statements" column, replace the two inserts below with the variant in
--- the block at the bottom of this file, then re-run.
+-- tooling stays in sync. This runs INSIDE the same transaction as the
+-- schema changes above, so the DDL and its history records commit
+-- atomically (or roll back together on any error).
+--
+-- The DO block adapts to either schema_migrations shape without a manual
+-- edit: some Supabase installs have a NOT NULL "statements" text[] column,
+-- others only (version, name). It detects the column and inserts the
+-- matching row shape, so there is no separate post-commit fallback to run.
 -- =====================================================================
-insert into supabase_migrations.schema_migrations (version, name)
-values
-  ('20260921120000', '0014_module_content_schemas_and_persistence'),
-  ('20260921130000', '0015_publish_profile_modules')
-on conflict (version) do nothing;
+do $history$
+declare
+  v_has_statements boolean;
+begin
+  select exists (
+    select 1 from information_schema.columns
+    where table_schema = 'supabase_migrations'
+      and table_name   = 'schema_migrations'
+      and column_name  = 'statements'
+  ) into v_has_statements;
+
+  if v_has_statements then
+    insert into supabase_migrations.schema_migrations (version, name, statements)
+    values
+      ('20260921120000', '0014_module_content_schemas_and_persistence',
+        array['-- applied via Supabase SQL editor (pr5-modular-profiles-prod-migration.sql)']),
+      ('20260921130000', '0015_publish_profile_modules',
+        array['-- applied via Supabase SQL editor (pr5-modular-profiles-prod-migration.sql)'])
+    on conflict (version) do nothing;
+  else
+    insert into supabase_migrations.schema_migrations (version, name)
+    values
+      ('20260921120000', '0014_module_content_schemas_and_persistence'),
+      ('20260921130000', '0015_publish_profile_modules')
+    on conflict (version) do nothing;
+  end if;
+end
+$history$;
 
 commit;
-
--- =====================================================================
--- FALLBACK (only if the two history inserts above fail because
--- schema_migrations.statements is NOT NULL). Run this on its own AFTER a
--- successful commit of the migration body above:
---
---   insert into supabase_migrations.schema_migrations (version, name, statements)
---   values
---     ('20260921120000', '0014_module_content_schemas_and_persistence', array['-- applied via SQL editor']),
---     ('20260921130000', '0015_publish_profile_modules', array['-- applied via SQL editor'])
---   on conflict (version) do nothing;
--- =====================================================================
