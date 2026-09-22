@@ -10,3 +10,9 @@ export const GENERIC_CREDENTIALS_ERROR = "Invalid email or password."
 
 export const GENERIC_RESEND_MESSAGE =
   "If that address still needs confirming, we've sent a new link. Please check your inbox."
+
+export const GENERIC_PASSWORD_RESET_MESSAGE =
+  "If an account exists for that address, we've sent a link to reset your password. Please check your inbox."
+
+export const PASSWORD_RESET_LINK_INVALID =
+  "This password reset link is invalid or has expired. Please request a new one."
