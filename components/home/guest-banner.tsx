@@ -11,10 +11,10 @@ export function GuestBanner() {
           freely — create an account to keep them.
         </p>
         <div className="flex shrink-0 gap-2">
-          <Button variant="outline" size="sm" nativeButton={false} render={<a href="#sign-in" />}>
+          <Button variant="outline" size="sm" nativeButton={false} render={<a href="/auth/login" />}>
             Sign in
           </Button>
-          <Button size="sm" nativeButton={false} render={<a href="#create-account" />}>
+          <Button size="sm" nativeButton={false} render={<a href="/auth/sign-up" />}>
             Create account
           </Button>
         </div>
