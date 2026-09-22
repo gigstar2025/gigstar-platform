@@ -14,15 +14,23 @@
 --   4. publish_profile_modules(...) promotes drafts -> published_content.
 --   5. Assert gigs.published_content was set AND exactly one new
 --      profile_revisions row was recorded.
---   6. ROLLBACK.
+--   6. Record the outcome, SELECT it as a visible Results row, then ROLLBACK.
 --
--- If no suitable owner/profile exists it prints SKIP (still rolls back).
--- Any assertion failure RAISEs and aborts (still rolled back).
--- Read the NOTICE output in the SQL Editor "Messages"/log pane.
+-- The final SELECT returns ONE row in the SQL Editor "Results" pane:
+--   status  = 'PASS' | 'SKIP' | 'FAIL'
+--   detail  = human-readable explanation
+-- A 'FAIL' status is returned as a row (not raised), so you always see a
+-- result rather than "Success. No rows returned." The transaction still
+-- rolls back regardless of status.
 --
 -- Keep MODULAR_PROFILES_FLOW OFF until this test and the verification pass.
 -- =====================================================================
 begin;
+
+create temp table _pr5_test_result (
+  status text,
+  detail text
+) on commit drop;
 
 do $test$
 declare
@@ -45,11 +53,12 @@ begin
   limit 1;
 
   if v_profile is null then
-    raise notice 'SKIP: no active owner membership on a dj/artist profile; functional test not run.';
+    insert into _pr5_test_result values (
+      'SKIP',
+      'No active owner membership on a dj/artist profile; functional test not run.'
+    );
     return;
   end if;
-
-  raise notice 'Using profile % (owner user %).', v_profile, v_owner;
 
   select count(*) into v_rev_before
   from public.profile_revisions where profile_id = v_profile;
@@ -67,11 +76,9 @@ begin
     'gigs',
     '{"gigs":[{"id":"__rollback_test__","title":"Rolled-back Test Gig","date":"2026-12-31","venueName":"Test Venue","town":"Testville","status":"on-sale"}]}'::jsonb
   );
-  raise notice 'save_profile_module_draft -> module id %.', v_saved;
 
   -- 4. Publish (promotes draft_content -> published_content, records a revision).
   v_published := public.publish_profile_modules(v_profile);
-  raise notice 'publish_profile_modules -> % module row(s) promoted.', v_published;
 
   -- 5a. Assert the gigs module now has published content.
   select published_content into v_pub
@@ -79,7 +86,11 @@ begin
   where profile_id = v_profile and module_key = 'gigs';
 
   if v_pub is null or not (v_pub ? 'gigs') then
-    raise exception 'FAIL: gigs.published_content missing after publish (got %).', v_pub;
+    insert into _pr5_test_result values (
+      'FAIL',
+      format('gigs.published_content missing after publish (got %s).', coalesce(v_pub::text, 'null'))
+    );
+    return;
   end if;
 
   -- 5b. Assert exactly one new revision snapshot was recorded.
@@ -87,14 +98,25 @@ begin
   from public.profile_revisions where profile_id = v_profile;
 
   if v_rev_after <> v_rev_before + 1 then
-    raise exception 'FAIL: expected exactly one new revision (before %, after %).',
-      v_rev_before, v_rev_after;
+    insert into _pr5_test_result values (
+      'FAIL',
+      format('expected exactly one new revision (before %s, after %s).', v_rev_before, v_rev_after)
+    );
+    return;
   end if;
 
-  raise notice 'PASS: save -> publish -> revision verified. Revisions % -> %. Published gigs content: %.',
-    v_rev_before, v_rev_after, v_pub;
-  raise notice 'ALL CHECKS PASSED. Rolling back so nothing persists.';
+  -- 5c. Success.
+  insert into _pr5_test_result values (
+    'PASS',
+    format(
+      'save -> publish -> revision verified on profile %s (owner %s). Modules promoted: %s. Revisions %s -> %s.',
+      v_profile, v_owner, v_published, v_rev_before, v_rev_after
+    )
+  );
 end
 $test$;
+
+-- Visible Results row (PASS / SKIP / FAIL). Runs before the rollback below.
+select status, detail from _pr5_test_result;
 
 rollback;
