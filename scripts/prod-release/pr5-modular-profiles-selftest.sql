@@ -62,14 +62,29 @@ begin
   -- Fixtures. auth.users is the FK target for user_accounts; create it first.
   -- Only stable, long-standing columns are populated so this works across
   -- GoTrue schema versions. Everything rolls back at the end.
+  --
+  -- NOTE: an AFTER INSERT trigger on auth.users (public.handle_new_user)
+  -- automatically provisions the matching public.user_accounts row. We must
+  -- NOT insert it again (that raises 23505 on user_accounts_pkey). Instead we
+  -- let the trigger create it, then UPDATE it to set the extra columns we need.
   -- -------------------------------------------------------------------------
   insert into auth.users (instance_id, id, aud, role, email)
   values ('00000000-0000-0000-0000-000000000000', v_uid, 'authenticated',
           'authenticated', 'pr5-selftest+' || v_uid::text || '@example.test');
 
-  insert into public.user_accounts (id, display_name, email, status)
-  values (v_uid, 'PR5 Selftest User',
-          'pr5-selftest+' || v_uid::text || '@example.test', 'active');
+  -- Reuse the trigger-created account row; set the fields the test relies on.
+  update public.user_accounts
+     set display_name = 'PR5 Selftest User',
+         email        = 'pr5-selftest+' || v_uid::text || '@example.test',
+         status       = 'active'
+   where id = v_uid;
+
+  if not found then
+    -- Defensive: if the provisioning trigger is absent, create the row.
+    insert into public.user_accounts (id, display_name, email, status)
+    values (v_uid, 'PR5 Selftest User',
+            'pr5-selftest+' || v_uid::text || '@example.test', 'active');
+  end if;
 
   insert into public.profiles
     (id, slug, type, display_name, visibility, lifecycle_status, created_by)
