@@ -30,6 +30,18 @@ export const MODULE_KEYS: readonly ModuleKey[] = [
 
 export type ProfileType = "dj" | "artist" | "venue" | "organiser"
 
+export const PROFILE_TYPES: readonly ProfileType[] = [
+  "dj",
+  "artist",
+  "venue",
+  "organiser",
+] as const
+
+/** Type guard: is an arbitrary string one of the module-eligible profile types? */
+export function isProfileType(value: string): value is ProfileType {
+  return (PROFILE_TYPES as readonly string[]).includes(value)
+}
+
 export interface ModuleDefinition {
   key: ModuleKey
   label: string
