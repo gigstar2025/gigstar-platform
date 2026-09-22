@@ -2,11 +2,15 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { SiteHeader } from '@/components/site/site-header'
 import { ProfileEditor } from '@/components/profile/editor/profile-editor'
+import { DbModuleEditor } from '@/components/profile/editor/modules/db-module-editor'
 import { ProfileCreatedLanding } from '@/components/onboarding/profile-created-landing'
 import { getShowcaseProfile, SHOWCASE_PROFILES } from '@/lib/profiles/showcase'
 import { MANAGED_PROFILES } from '@/lib/profiles/editor/demo-account'
 import { PROFILE_TYPE_OPTIONS } from '@/lib/onboarding/constants'
 import { createClient } from '@/lib/supabase/server'
+import { MODULAR_PROFILES_FLOW } from '@/lib/flags'
+import { getEditorModules } from '@/lib/profiles/modules/persistence'
+import { isProfileType } from '@/lib/profiles/modules/registry'
 
 // This route reads cookies (Supabase session) in the DB-backed branch for
 // freshly created onboarding profiles. With generateStaticParams present, Next
@@ -62,10 +66,31 @@ export default async function EditProfilePage({
 
   const { data: owned } = await supabase
     .from('profiles')
-    .select('slug, display_name, type')
+    .select('id, slug, display_name, type')
     .eq('slug', slug)
     .maybeSingle()
   if (!owned) notFound()
+
+  // Modular flow (PR-5b): render the persisted, DB-backed module editor for
+  // profile types that support modules. Ownership for both the initial load and
+  // every write is enforced inside the SECURITY DEFINER RPCs, not here.
+  if (MODULAR_PROFILES_FLOW && isProfileType(owned.type)) {
+    const initialModules = await getEditorModules(owned.id)
+    return (
+      <div className="flex min-h-dvh flex-col bg-background">
+        <SiteHeader />
+        <main className="flex-1 bg-muted/20">
+          <DbModuleEditor
+            profileId={owned.id}
+            slug={owned.slug}
+            displayName={owned.display_name}
+            profileType={owned.type}
+            initialModules={initialModules}
+          />
+        </main>
+      </div>
+    )
+  }
 
   const typeLabel =
     PROFILE_TYPE_OPTIONS.find((option) => option.value === owned.type)?.label ??

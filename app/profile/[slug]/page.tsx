@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { notFound } from 'next/navigation'
+import { notFound, permanentRedirect } from 'next/navigation'
 import Link from 'next/link'
 import { Pencil } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -8,6 +8,7 @@ import { SiteFooter } from '@/components/site/site-footer'
 import { ProfileHeader } from '@/components/profile/profile-header'
 import { ModuleView } from '@/components/profile/module-view'
 import { getProfileBySlug, SAMPLE_PROFILES } from '@/lib/profiles/data'
+import { MODULAR_PROFILES_FLOW } from '@/lib/flags'
 
 export function generateStaticParams() {
   return SAMPLE_PROFILES.map((p) => ({ slug: p.slug }))
@@ -33,6 +34,14 @@ export default async function ProfilePage({
   params: Promise<{ slug: string }>
 }) {
   const { slug } = await params
+
+  // Convergence (PR-5): /p/[slug] is the canonical public profile URL. When the
+  // modular flow is enabled, permanently redirect the legacy /profile/[slug]
+  // URL to it. OFF by default, so existing URLs render unchanged for now.
+  if (MODULAR_PROFILES_FLOW) {
+    permanentRedirect(`/p/${slug}`)
+  }
+
   const profile = getProfileBySlug(slug)
   if (!profile) notFound()
 

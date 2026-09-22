@@ -18,3 +18,11 @@ function flagEnabled(value: string | undefined): boolean {
 // reachable directly (behind the normal auth guard) so the flow can be
 // verified before the flag is switched on.
 export const ONBOARDING_FLOW_ENABLED = flagEnabled(process.env.ONBOARDING_FLOW_ENABLED)
+
+// Gates the modular profile pages convergence (PR-5). While OFF (the default),
+// the public profile routes keep rendering their existing content and no
+// canonical redirect from /profile/[slug] to /p/[slug] takes effect, so every
+// existing profile and URL is preserved untouched. Persisted module reads and
+// the /p canonical redirect only activate once this is switched on (after the
+// persisted /p profiles land in PR-5b).
+export const MODULAR_PROFILES_FLOW = flagEnabled(process.env.MODULAR_PROFILES_FLOW)
