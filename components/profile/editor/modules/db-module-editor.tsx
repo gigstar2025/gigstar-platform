@@ -101,13 +101,27 @@ export function DbModuleEditor({
     const initial: Record<string, ModuleState> = {}
     for (const key of eligibleKeys) {
       const existing = initialModules.find((m) => m.key === key)
-      const hasDraft = existing?.draftContent != null
-      const content = hasDraft ? existing.draftContent : emptyContentFor(key)
+      // Profile creation seeds recommended/required module rows with an empty
+      // placeholder draft ({}). That row means the module is pre-added to the
+      // profile, but {} is NOT usable content: starting a form from it leaves
+      // nested shapes (e.g. radio.radio) undefined and crashes the editor on
+      // render. Treat only a non-empty object as real draft content; otherwise
+      // start from the module's correctly-shaped empty template.
+      const stored = existing?.draftContent
+      const hasContent =
+        typeof stored === 'object' &&
+        stored !== null &&
+        !Array.isArray(stored) &&
+        Object.keys(stored).length > 0
+      const isHidden = existing?.isHidden ?? false
+      const content = hasContent ? stored : emptyContentFor(key)
       initial[key] = {
-        enabled: hasDraft,
-        isHidden: existing?.isHidden ?? false,
+        // A seeded/added row (even a {} placeholder) means the module is part
+        // of the profile, so keep it enabled and editable.
+        enabled: existing != null,
+        isHidden,
         content,
-        savedSerialized: hasDraft ? serialize(content, existing.isHidden) : null,
+        savedSerialized: existing != null ? serialize(content, isHidden) : null,
         saveState: 'idle',
         errors: [],
       }
