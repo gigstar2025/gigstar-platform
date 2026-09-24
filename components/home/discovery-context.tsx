@@ -1,7 +1,7 @@
 'use client'
 
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
-import { ANYWHERE, REGION_CENTERS, nearestAreaLabel, type GeoPoint, type DiscoveryType } from '@/lib/discovery'
+import { ANYWHERE, REGION_CENTERS, nearestAreaLabel, type GeoPoint, type DiscoveryType, type DiscoveryProfile } from '@/lib/discovery'
 import { categoryType } from '@/lib/home/derive'
 import type { FeedCategory } from '@/lib/home/feed-data'
 
@@ -40,6 +40,8 @@ interface DiscoveryState {
   search: string
   center: GeoPoint
   activeType: DiscoveryType | null
+  /** Real, published profiles fetched server-side (excludes hidden profiles). */
+  liveProfiles: DiscoveryProfile[]
   geoStatus: GeoStatus
   geoMessage: string | null
   filtersActive: boolean
@@ -56,7 +58,13 @@ interface DiscoveryState {
 
 const DiscoveryContext = createContext<DiscoveryState | null>(null)
 
-export function DiscoveryProvider({ children }: { children: ReactNode }) {
+export function DiscoveryProvider({
+  children,
+  liveProfiles = [],
+}: {
+  children: ReactNode
+  liveProfiles?: DiscoveryProfile[]
+}) {
   const [location, setLocationState] = useState<ActiveLocation>(DEFAULT_LOCATION)
   const [radius, setRadius] = useState<number>(DEFAULT_RADIUS)
   const [category, setCategory] = useState<FeedCategory>(DEFAULT_CATEGORY)
@@ -117,6 +125,7 @@ export function DiscoveryProvider({ children }: { children: ReactNode }) {
       search,
       center: { lat: location.lat, lng: location.lng },
       activeType: categoryType(category),
+      liveProfiles,
       geoStatus,
       geoMessage,
       filtersActive:
@@ -134,7 +143,7 @@ export function DiscoveryProvider({ children }: { children: ReactNode }) {
       useMyLocation,
       clearFilters,
     }
-  }, [location, radius, category, search, geoStatus, geoMessage, setLocation, useMyLocation, clearFilters])
+  }, [location, radius, category, search, liveProfiles, geoStatus, geoMessage, setLocation, useMyLocation, clearFilters])
 
   return <DiscoveryContext.Provider value={value}>{children}</DiscoveryContext.Provider>
 }

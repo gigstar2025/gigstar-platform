@@ -3,6 +3,7 @@ import { SiteFooter } from '@/components/site/site-footer'
 import { GuestBanner } from '@/components/home/guest-banner'
 import { DiscoveryProvider } from '@/components/home/discovery-context'
 import { LocationDiscovery } from '@/components/home/location-discovery'
+import { fetchLiveDiscoveryProfiles } from '@/lib/discovery/live'
 import { HomeFeed } from '@/components/home/home-feed'
 import { ShortFormSection } from '@/components/home/short-form-section'
 import {
@@ -18,13 +19,15 @@ import { HowItWorks } from '@/components/site/how-it-works'
 import { Faq } from '@/components/site/faq'
 import { Cta } from '@/components/site/cta'
 
-export default function Page() {
+export default async function Page() {
+  const liveProfiles = await fetchLiveDiscoveryProfiles()
+
   return (
     <div id="top" className="flex min-h-screen flex-col pb-16 md:pb-0">
       <SiteHeader />
       <main className="flex-1">
         <GuestBanner />
-        <DiscoveryProvider>
+        <DiscoveryProvider liveProfiles={liveProfiles}>
           <div className="border-b border-border/60">
             <LocationDiscovery />
           </div>
