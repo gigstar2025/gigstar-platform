@@ -4,6 +4,8 @@ import { useRef, useState } from 'react'
 import { Menu, X, ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { signOut } from '@/app/auth/actions'
+import { useUser } from '@/lib/supabase/use-user'
 import { Logo } from './logo'
 
 const NAV_LINKS = [
@@ -25,19 +27,37 @@ const PROFILE_EXAMPLES = [
   { label: 'Event organiser profile', href: '/p/nightform' },
 ]
 
-// Account entry points. These route to authenticated, server-guarded pages —
-// an unauthenticated visitor who follows them is redirected to sign in — so
-// the links are safe to render statically without the header knowing the user.
+// Account entry points. These route to authenticated, server-guarded pages, so
+// they are only surfaced when a session is present — an unauthenticated visitor
+// never sees them (and would be redirected to sign in if they reached them).
 const ACCOUNT_LINKS = [
   { label: 'Your profiles', href: '/profiles/manage' },
   { label: 'Create a profile', href: '/onboarding' },
 ]
+
+function SignOutForm({
+  className,
+  variant = 'ghost',
+}: {
+  className?: string
+  variant?: React.ComponentProps<typeof Button>['variant']
+}) {
+  return (
+    <form action={signOut} className={className}>
+      <Button type="submit" variant={variant} size="sm" className={className ? 'w-full' : undefined}>
+        Log out
+      </Button>
+    </form>
+  )
+}
 
 export function SiteHeader() {
   const [open, setOpen] = useState(false)
   const [examplesOpen, setExamplesOpen] = useState(false)
   const [accountOpen, setAccountOpen] = useState(false)
   const accountTriggerRef = useRef<HTMLButtonElement>(null)
+  const { user, loading } = useUser()
+  const isAuthed = !!user
 
   // Close the desktop Account dropdown on Escape and return focus to its
   // trigger. Scoped to the Account container's onKeyDown so it only reacts
@@ -104,50 +124,65 @@ export function SiteHeader() {
             )}
           </div>
 
-          <div className="relative" onKeyDown={handleAccountKeyDown}>
-            <button
-              ref={accountTriggerRef}
-              type="button"
-              onClick={() => setAccountOpen((v) => !v)}
-              aria-expanded={accountOpen}
-              className="flex items-center gap-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-            >
-              Account
-              <ChevronDown className={cn('size-4 transition-transform', accountOpen && 'rotate-180')} />
-            </button>
-            {accountOpen && (
-              <>
-                <button
-                  type="button"
-                  aria-hidden
-                  tabIndex={-1}
-                  className="fixed inset-0 z-40 cursor-default"
-                  onClick={() => setAccountOpen(false)}
-                />
-                <div className="absolute right-0 top-full z-50 mt-2 w-56 rounded-xl border border-border/60 bg-card p-1.5 shadow-lg">
-                  {ACCOUNT_LINKS.map((link) => (
-                    <a
-                      key={link.href}
-                      href={link.href}
-                      onClick={() => setAccountOpen(false)}
-                      className="block rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                    >
-                      {link.label}
-                    </a>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
+          {isAuthed && (
+            <div className="relative" onKeyDown={handleAccountKeyDown}>
+              <button
+                ref={accountTriggerRef}
+                type="button"
+                onClick={() => setAccountOpen((v) => !v)}
+                aria-expanded={accountOpen}
+                className="flex items-center gap-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+              >
+                Account
+                <ChevronDown className={cn('size-4 transition-transform', accountOpen && 'rotate-180')} />
+              </button>
+              {accountOpen && (
+                <>
+                  <button
+                    type="button"
+                    aria-hidden
+                    tabIndex={-1}
+                    className="fixed inset-0 z-40 cursor-default"
+                    onClick={() => setAccountOpen(false)}
+                  />
+                  <div className="absolute right-0 top-full z-50 mt-2 w-60 rounded-xl border border-border/60 bg-card p-1.5 shadow-lg">
+                    {user?.email && (
+                      <p className="truncate border-b border-border/60 px-3 py-2 text-xs text-muted-foreground">
+                        Signed in as <span className="font-medium text-foreground">{user.email}</span>
+                      </p>
+                    )}
+                    {ACCOUNT_LINKS.map((link) => (
+                      <a
+                        key={link.href}
+                        href={link.href}
+                        onClick={() => setAccountOpen(false)}
+                        className="block rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                      >
+                        {link.label}
+                      </a>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </nav>
 
         <div className="hidden items-center gap-2 lg:flex">
-          <Button variant="ghost" size="sm" nativeButton={false} render={<a href="/auth/login" />}>
-            Log in
-          </Button>
-          <Button size="sm" nativeButton={false} render={<a href="/auth/sign-up" />}>
-            Get started
-          </Button>
+          {loading ? (
+            <div className="h-8 w-32 animate-pulse rounded-md bg-muted" aria-hidden />
+          ) : isAuthed ? (
+            <SignOutForm variant="outline" />
+          ) : (
+            <>
+              <Button variant="ghost" size="sm" nativeButton={false} render={<a href="/auth/login" />}>
+                Log in
+              </Button>
+              <Button size="sm" nativeButton={false} render={<a href="/auth/sign-up" />}>
+                Get started
+              </Button>
+            </>
+          )}
         </div>
 
         <button
@@ -189,38 +224,55 @@ export function SiteHeader() {
               </a>
             ))}
 
-            <p className="mt-3 px-3 pb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Account
-            </p>
-            {ACCOUNT_LINKS.map((link) => (
-              <a
-                key={link.href}
-                href={link.href}
-                onClick={() => setOpen(false)}
-                className="rounded-md px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-              >
-                {link.label}
-              </a>
-            ))}
+            {isAuthed && (
+              <>
+                <p className="mt-3 px-3 pb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Account
+                </p>
+                {user?.email && (
+                  <p className="truncate px-3 pb-1 text-xs text-muted-foreground">
+                    Signed in as <span className="font-medium text-foreground">{user.email}</span>
+                  </p>
+                )}
+                {ACCOUNT_LINKS.map((link) => (
+                  <a
+                    key={link.href}
+                    href={link.href}
+                    onClick={() => setOpen(false)}
+                    className="rounded-md px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                  >
+                    {link.label}
+                  </a>
+                ))}
+              </>
+            )}
 
             <div className="mt-2 flex flex-col gap-2">
-              <Button
-                variant="outline"
-                className="w-full"
-                nativeButton={false}
-                render={<a href="/auth/login" />}
-                onClick={() => setOpen(false)}
-              >
-                Log in
-              </Button>
-              <Button
-                className="w-full"
-                nativeButton={false}
-                render={<a href="/auth/sign-up" />}
-                onClick={() => setOpen(false)}
-              >
-                Get started
-              </Button>
+              {loading ? (
+                <div className="h-9 w-full animate-pulse rounded-md bg-muted" aria-hidden />
+              ) : isAuthed ? (
+                <SignOutForm className="w-full" variant="outline" />
+              ) : (
+                <>
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    nativeButton={false}
+                    render={<a href="/auth/login" />}
+                    onClick={() => setOpen(false)}
+                  >
+                    Log in
+                  </Button>
+                  <Button
+                    className="w-full"
+                    nativeButton={false}
+                    render={<a href="/auth/sign-up" />}
+                    onClick={() => setOpen(false)}
+                  >
+                    Get started
+                  </Button>
+                </>
+              )}
             </div>
           </nav>
         </div>
