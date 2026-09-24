@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
   ANYWHERE,
+  DISCOVERY_PROFILES,
   DISCOVERY_TYPE_LABELS,
   EVENT_KIND_LABELS,
   RADIUS_CHOICES,
@@ -28,6 +29,7 @@ import {
   formatDistance,
   formatEventDate,
   profilesNear,
+  queryProfilesNear,
   recommendedNear,
   searchLocationSuggestions,
   type EventStatus,
@@ -61,6 +63,7 @@ export function LocationDiscovery() {
     search,
     center,
     activeType,
+    liveProfiles,
     geoStatus,
     geoMessage,
     filtersActive,
@@ -87,9 +90,17 @@ export function LocationDiscovery() {
 
   const typeArg = activeType ?? undefined
 
+  // Real, published profiles first, then the example dataset — one merged pool
+  // so homepage search reaches genuine listings (e.g. /p/tony-blackburn) while
+  // the example content stays visibly tagged in the results.
+  const searchPool = useMemo(
+    () => [...liveProfiles, ...DISCOVERY_PROFILES],
+    [liveProfiles],
+  )
+
   const hits = useMemo(
-    () => profilesNear({ center, radius, type: typeArg, search }),
-    [center, radius, typeArg, search],
+    () => queryProfilesNear(searchPool, { center, radius, type: typeArg, search }),
+    [searchPool, center, radius, typeArg, search],
   )
   const recommended = useMemo(() => recommendedNear(center, radius).slice(0, 3), [center, radius])
   const events = useMemo(() => eventsNear(center, radius).slice(0, 4), [center, radius])
@@ -496,6 +507,11 @@ function ProfileCard({ p }: { p: WithDistance<DiscoveryProfile> }) {
         <span className="absolute left-2 top-2 rounded-full bg-background/80 px-2 py-1 text-xs font-medium text-foreground backdrop-blur">
           {DISCOVERY_TYPE_LABELS[p.type]}
         </span>
+        {p.source === 'example' && (
+          <span className="absolute bottom-2 left-2 rounded-full bg-muted/90 px-2 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
+            Example
+          </span>
+        )}
       </div>
       <div className="flex flex-1 flex-col p-4">
         <img

@@ -10,6 +10,15 @@ import type { Region } from './geo'
 
 export type DiscoveryType = 'dj' | 'artist' | 'venue' | 'organiser'
 
+/**
+ * Where a discovery record comes from:
+ *  - 'live'    — a real, published profile fetched from the database.
+ *  - 'example' — a mock demonstration record from the seed dataset.
+ * Kept explicit so the homepage can surface real profiles in search while
+ * still visibly distinguishing the example content from genuine listings.
+ */
+export type DiscoverySource = 'live' | 'example'
+
 export const DISCOVERY_TYPE_LABELS: Record<DiscoveryType, string> = {
   dj: 'DJ',
   artist: 'Artist / Band',
@@ -44,6 +53,8 @@ export interface DiscoveryProfile {
   /** Whether a full public profile page exists for this record. */
   hasPage: boolean
   pageSlug?: string
+  /** Live (real, published) vs example (seed) record. */
+  source: DiscoverySource
 }
 
 export type ContentKind =

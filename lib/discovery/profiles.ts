@@ -98,6 +98,7 @@ function mk(
     travelRadius,
     hasPage: !!opts.page,
     pageSlug: opts.page ? slug : undefined,
+    source: 'example',
   }
 }
 

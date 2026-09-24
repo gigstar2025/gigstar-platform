@@ -106,12 +106,25 @@ export interface NearQuery {
   search?: string
 }
 
-export function profilesNear(q: NearQuery): WithDistance<DiscoveryProfile>[] {
-  return DISCOVERY_PROFILES.filter((p) => (q.type ? p.type === q.type : true))
+/**
+ * Query an ARBITRARY set of profiles by type / keyword / radius. Lets callers
+ * mix live (real, published) profiles with the example dataset through the same
+ * matching + distance logic, so homepage search reaches genuine listings.
+ */
+export function queryProfilesNear(
+  profiles: DiscoveryProfile[],
+  q: NearQuery,
+): WithDistance<DiscoveryProfile>[] {
+  return profiles
+    .filter((p) => (q.type ? p.type === q.type : true))
     .filter((p) => (q.search ? matchesSearch(p, q.search) : true))
     .map((p) => ({ ...p, distance: haversineMiles(q.center, p) }))
     .filter((p) => p.distance <= q.radius)
     .sort(sortByDistance)
+}
+
+export function profilesNear(q: NearQuery): WithDistance<DiscoveryProfile>[] {
+  return queryProfilesNear(DISCOVERY_PROFILES, q)
 }
 
 export function recommendedNear(center: GeoPoint, radius: number): WithDistance<DiscoveryProfile>[] {
