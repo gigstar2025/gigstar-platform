@@ -24,16 +24,37 @@
 --   This mirrors the lifecycle logic of publish_profile (0005) and makes the
 --   "Publish changes" button do exactly what its label promises.
 --
+--   Also hardens the module-content promotion so it can never DESTROY already
+--   published content (see DATA-LOSS FIX below).
+--
+-- DATA-LOSS FIX (vs 0015)
+--   0015 ran `published_content = draft_content` UNCONDITIONALLY on every row.
+--   That is destructive for any row where draft_content IS NULL but
+--   published_content IS NOT NULL: clicking "Publish changes" again would
+--   overwrite live published content with NULL (i.e. silently un-publish it).
+--   The editor UI does not null drafts today (creation seeds '{}', saves write
+--   validated non-null JSON, and hiding uses is_hidden — not a null draft), so
+--   this is a latent hazard rather than an observed one. This migration removes
+--   the hazard outright by promoting with COALESCE(draft, published): a row
+--   with a draft publishes that draft; a row with a NULL draft keeps whatever
+--   was already published. Un-publishing a module remains the job of is_hidden
+--   (public reads already filter is_hidden = false AND published_content NOT
+--   NULL), not of nulling content.
+--
 -- WHAT THIS MIGRATION DOES NOT DO
 --   * No RLS changes and no new grants. The RPC is already SECURITY DEFINER and
 --     already grants EXECUTE to authenticated (owner enforced inside via
 --     has_profile_access). Row visibility on the base tables is unchanged.
 --   * It does not force a re-hidden ('unlisted') profile back to public, so a
 --     future explicit hide/unpublish control is not overridden.
+--   * It never clears an existing published_content (see DATA-LOSS FIX).
 --
 -- SAFETY
 --   * Idempotent: create or replace; re-running publish keeps the profile
---     public/active (no-op on the profile row after the first publish).
+--     public/active (no-op on the profile row after the first publish) and
+--     re-copies identical content (no-op on module rows).
+--   * Non-destructive: existing published_content is preserved for any row
+--     without a draft.
 --   * Owner-only, unchanged from 0015.
 set local search_path = public, extensions;
 
@@ -56,9 +77,12 @@ begin
   end if;
 
   -- Promote draft_content -> published_content for every module row on the
-  -- profile. Rows with a null draft become null published (i.e. unpublished).
+  -- profile, but NEVER destroy already-published content: a row with a NULL
+  -- draft keeps its existing published_content (COALESCE), rather than being
+  -- silently un-published. Un-publishing is done via is_hidden, not by nulling
+  -- content. Only rows that actually carry a draft are counted as published.
   update public.profile_modules m
-  set published_content = m.draft_content,
+  set published_content = coalesce(m.draft_content, m.published_content),
       published_at      = now(),
       updated_by        = v_uid,
       updated_at        = now()
@@ -104,7 +128,7 @@ begin
 end;
 $$;
 comment on function public.publish_profile_modules(uuid) is
-  'Promote all module draft_content to published_content, take the profile live (draft->active, hidden->public), and record a revision snapshot. Owner only.';
+  'Promote module draft_content to published_content (COALESCE: never clears an existing published_content), take the profile live (draft->active, hidden->public), and record a revision snapshot. Owner only.';
 
 -- EXECUTE grants unchanged from 0015 (re-asserted for idempotency).
 revoke execute on function public.publish_profile_modules(uuid) from public, anon;
