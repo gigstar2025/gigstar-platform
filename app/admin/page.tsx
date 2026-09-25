@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { Mail } from "lucide-react"
+import { Mail, ListChecks } from "lucide-react"
 
 import { requirePlatformAdmin } from "@/lib/admin/auth"
 
@@ -10,6 +10,12 @@ export const metadata = {
 // The admin tool registry. Add future admin pages here — each becomes a card on
 // the entry point and inherits the shared /admin layout guard automatically.
 const adminTools = [
+  {
+    href: "/admin/issues",
+    title: "Issues",
+    description: "Track bugs, improvements, and tasks with discussion, fixes, and sign-off.",
+    icon: ListChecks,
+  },
   {
     href: "/admin/confirmation-email",
     title: "Confirmation Email",
