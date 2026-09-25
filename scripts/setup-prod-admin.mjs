@@ -137,6 +137,15 @@ values (
   '<p>Welcome to GigStar!</p><p>Please confirm your email address to activate your account and start booking gigs.</p>'
 )
 on conflict (template_key) do nothing;
+
+-- Table & function privileges for the authenticated role.
+-- Supabase's default privileges are NOT reliably applied to objects created
+-- through the Management API / SQL editor, so grant them explicitly. Without
+-- these, an authenticated request hits "permission denied for table ..." BEFORE
+-- RLS is even evaluated. RLS policies above still restrict rows to admins.
+grant select on table public.platform_admins to authenticated;
+grant select, insert, update on table public.admin_email_templates to authenticated;
+grant execute on function public.is_platform_admin(uuid) to authenticated;
 `
 
 function esc(s) {
