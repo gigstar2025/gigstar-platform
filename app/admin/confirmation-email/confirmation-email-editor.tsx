@@ -57,9 +57,11 @@ export function ConfirmationEmailEditor({ initial, livePublishConfigured }: Prop
           role="status"
         >
           <strong className="font-medium text-foreground">Draft mode.</strong> Live publishing is not configured yet, so
-          Save stores your wording as a draft without changing the email new users currently receive. Once{" "}
-          <code className="rounded bg-background px-1 py-0.5 text-xs">SUPABASE_ACCESS_TOKEN</code> is set and a test
-          signup is verified, Save will push to the live template.
+          Save stores your wording as a draft without changing the email new users currently receive. Live publishing is
+          pinned to the <code className="rounded bg-background px-1 py-0.5 text-xs">gigstar-production</code> Supabase
+          project and only activates once{" "}
+          <code className="rounded bg-background px-1 py-0.5 text-xs">SUPABASE_ACCESS_TOKEN</code> is set in the Vercel
+          Production environment and a test signup is verified.
         </div>
       ) : null}
 

@@ -18,6 +18,16 @@
 
 export const CONFIRMATION_TEMPLATE_KEY = "confirmation" as const
 
+/**
+ * The ONLY Supabase project ref the live publish path is permitted to write to.
+ * This is the confirmed `gigstar-production` project. The publish path targets
+ * this ref explicitly (not whatever the runtime SUPABASE_URL happens to be), and
+ * refuses to run if the configured/derived ref differs — so the live template of
+ * a wrong project (e.g. the DEV project the sandbox points at) can never be
+ * overwritten by mistake.
+ */
+export const PRODUCTION_PROJECT_REF = "dyshjxdznhswctluhzmc" as const
+
 /** The exact, non-editable confirmation URL (Supabase template variables). */
 export const CONFIRMATION_LINK_HREF =
   "{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=signup"
@@ -80,14 +90,35 @@ export async function publishConfirmationTemplate(input: {
     return {
       published: false,
       reason:
-        "Live publishing is not configured. Set SUPABASE_ACCESS_TOKEN (a Supabase personal access token) to push saved wording to the live confirmation email.",
+        "Live publishing is not configured. Set SUPABASE_ACCESS_TOKEN (a Supabase personal access token) in the Vercel Production environment to push saved wording to the live confirmation email.",
     }
   }
 
-  const ref = projectRefFromUrl(process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "")
-  if (!ref) {
-    return { published: false, reason: "Could not determine the Supabase project ref from the project URL." }
+  // Ref pinning: the live publish path is only ever allowed to write to the
+  // confirmed production project. If an explicit target ref is configured, it
+  // MUST equal the pinned production ref; otherwise we derive the ref from the
+  // runtime Supabase URL and require it to match. Any mismatch fails clearly
+  // and touches nothing — this prevents overwriting the DEV project's template
+  // (the sandbox's SUPABASE_URL points at DEV).
+  const configuredRef =
+    process.env.SUPABASE_PROD_PROJECT_REF ??
+    projectRefFromUrl(process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "")
+
+  if (!configuredRef) {
+    return { published: false, reason: "Could not determine the Supabase project ref to publish to." }
   }
+
+  if (configuredRef !== PRODUCTION_PROJECT_REF) {
+    return {
+      published: false,
+      reason:
+        `Refusing to publish: the configured Supabase project ref (${configuredRef}) is not the permitted ` +
+        `production project (${PRODUCTION_PROJECT_REF}). The live confirmation email is only published to ` +
+        `gigstar-production. Run the admin editor in an environment whose Supabase project is ${PRODUCTION_PROJECT_REF}.`,
+    }
+  }
+
+  const ref = PRODUCTION_PROJECT_REF
 
   try {
     const res = await fetch(`https://api.supabase.com/v1/projects/${ref}/config/auth`, {
