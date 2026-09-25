@@ -15,7 +15,13 @@ export async function getPlatformAdminUser() {
   const {
     data: { user },
   } = await supabase.auth.getUser()
-  if (!user) return null
+  if (!user) {
+    // No server-readable session. Distinguishes a genuine signed-out request
+    // from an admin whose session cookie the server could not read (the
+    // production login-loop symptom).
+    console.warn("[admin-guard] no server session: getUser() returned no user")
+    return null
+  }
 
   const { data, error } = await supabase
     .from("platform_admins")
@@ -23,7 +29,17 @@ export async function getPlatformAdminUser() {
     .eq("user_id", user.id)
     .maybeSingle()
 
-  if (error || !data) return null
+  if (error) {
+    // A query failure (e.g. RLS/schema issue) must NOT be silently treated as
+    // "not an admin" without a trace — that would mask a real misconfiguration.
+    // Still deny access, but make the cause visible in server logs.
+    console.warn(`[admin-guard] platform_admins lookup failed for ${user.id}: ${error.message}`)
+    return null
+  }
+  if (!data) {
+    console.warn(`[admin-guard] authenticated user ${user.id} is not a platform admin`)
+    return null
+  }
   return user
 }
 
