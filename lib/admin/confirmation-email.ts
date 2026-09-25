@@ -94,27 +94,40 @@ export async function publishConfirmationTemplate(input: {
     }
   }
 
-  // Ref pinning: the live publish path is only ever allowed to write to the
-  // confirmed production project. If an explicit target ref is configured, it
-  // MUST equal the pinned production ref; otherwise we derive the ref from the
-  // runtime Supabase URL and require it to match. Any mismatch fails clearly
-  // and touches nothing — this prevents overwriting the DEV project's template
-  // (the sandbox's SUPABASE_URL points at DEV).
-  const configuredRef =
-    process.env.SUPABASE_PROD_PROJECT_REF ??
-    projectRefFromUrl(process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "")
+  // Ref pinning (defense in depth). The live publish path is only ever allowed
+  // to write to the confirmed production project, and ONLY from an environment
+  // that is itself wired to that project. Two independent checks must both hold:
+  //
+  //   1. Intent — if an explicit target ref (SUPABASE_PROD_PROJECT_REF) is set,
+  //      it MUST equal the pinned production ref.
+  //   2. Reality — the Supabase project this runtime actually talks to (derived
+  //      from its own SUPABASE_URL) MUST be the pinned production ref.
+  //
+  // Check 2 is what makes the DEV sandbox safe: its SUPABASE_URL points at the
+  // DEV project, so it can never overwrite the live production template even if
+  // SUPABASE_PROD_PROJECT_REF happens to be present in its environment. Only the
+  // real production deployment (whose SUPABASE_URL is the prod project) publishes.
+  const configuredRef = process.env.SUPABASE_PROD_PROJECT_REF ?? null
+  const runtimeRef = projectRefFromUrl(
+    process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "",
+  )
 
-  if (!configuredRef) {
-    return { published: false, reason: "Could not determine the Supabase project ref to publish to." }
-  }
-
-  if (configuredRef !== PRODUCTION_PROJECT_REF) {
+  if (configuredRef && configuredRef !== PRODUCTION_PROJECT_REF) {
     return {
       published: false,
       reason:
-        `Refusing to publish: the configured Supabase project ref (${configuredRef}) is not the permitted ` +
-        `production project (${PRODUCTION_PROJECT_REF}). The live confirmation email is only published to ` +
-        `gigstar-production. Run the admin editor in an environment whose Supabase project is ${PRODUCTION_PROJECT_REF}.`,
+        `Refusing to publish: SUPABASE_PROD_PROJECT_REF (${configuredRef}) is not the permitted ` +
+        `production project (${PRODUCTION_PROJECT_REF}). Saved as draft only.`,
+    }
+  }
+
+  if (runtimeRef !== PRODUCTION_PROJECT_REF) {
+    return {
+      published: false,
+      reason:
+        `Refusing to publish: this environment's Supabase project (${runtimeRef ?? "unknown"}) is not ` +
+        `${PRODUCTION_PROJECT_REF}. The live confirmation email can only be published from the production ` +
+        `deployment (gigstar-production), not from a preview or the DEV sandbox. Saved as draft only.`,
     }
   }
 
