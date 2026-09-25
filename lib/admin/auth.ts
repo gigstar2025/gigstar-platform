@@ -47,10 +47,10 @@ export async function getPlatformAdminUser() {
  * Guard for admin-only routes. Redirects unauthenticated / non-admin users to
  * the login page rather than exposing the existence of the admin area.
  */
-export async function requirePlatformAdmin() {
+export async function requirePlatformAdmin(next = "/admin") {
   const user = await getPlatformAdminUser()
   if (!user) {
-    redirect("/auth/login?next=/admin/confirmation-email")
+    redirect(`/auth/login?next=${encodeURIComponent(next)}`)
   }
   return user
 }
