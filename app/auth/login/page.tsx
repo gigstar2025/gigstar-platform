@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation"
 
 import { createClient } from "@/lib/supabase/client"
 import { GENERIC_CREDENTIALS_ERROR } from "@/lib/auth/errors"
+import { safeNextPath } from "@/lib/auth/safe-next"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -37,7 +38,15 @@ export default function LoginPage() {
     // Hard navigation to the central post-login hub, which reads the fresh
     // session cookies server-side and resolves the real destination. Replaces
     // the old hardcoded /dev/foundation target (404 in Production).
-    window.location.assign("/auth/post-login")
+    //
+    // Preserve a validated `next` target (e.g. the admin page the user was
+    // bounced from) so the hub can return them there instead of the homepage.
+    // Read from the live URL at submit time to avoid a Suspense-bound
+    // useSearchParams during prerender.
+    const requestedNext = safeNextPath(new URLSearchParams(window.location.search).get("next"))
+    window.location.assign(
+      requestedNext ? `/auth/post-login?next=${encodeURIComponent(requestedNext)}` : "/auth/post-login",
+    )
   }
 
   return (
