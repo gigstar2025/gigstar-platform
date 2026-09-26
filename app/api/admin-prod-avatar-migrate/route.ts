@@ -175,12 +175,98 @@ grant select (
 ) on table public.media_assets to anon, authenticated;
 `
 
+// Rollback-only security probe: proves set_profile_avatar authorises correctly
+// on production without mutating data (the caller wraps it in begin/rollback,
+// and the temp table is on commit drop). Mirrors the DEV security test.
+const VERIFY_SQL = `
+create temporary table _avatar_sec (
+  authorized_ok boolean,
+  unauthorized_blocked boolean,
+  anon_blocked boolean,
+  note text
+) on commit drop;
+
+do $$
+declare
+  v_profile uuid;
+  v_member uuid;
+  v_outsider uuid;
+  v_media uuid;
+  authorized_ok boolean := false;
+  unauthorized_blocked boolean := false;
+  anon_blocked boolean := false;
+begin
+  select p.id, m.user_id into v_profile, v_member
+  from public.profiles p
+  join public.profile_memberships m on m.profile_id = p.id and m.status = 'active'
+  limit 1;
+
+  if v_profile is null then
+    insert into _avatar_sec values (null, null, null, 'NO_PROFILE_WITH_MEMBERSHIP');
+    return;
+  end if;
+
+  select id into v_outsider from auth.users where id <> v_member limit 1;
+
+  -- 1. Authorized member -> should succeed.
+  perform set_config('role','authenticated', true);
+  perform set_config('request.jwt.claims', json_build_object('sub', v_member::text, 'role','authenticated')::text, true);
+  begin
+    select public.set_profile_avatar(
+      v_profile, v_profile::text || '/verify.png',
+      'https://example.test/verify.png', 'verify', 16, 16, 100
+    ) into v_media;
+    authorized_ok := (v_media is not null);
+  exception when others then
+    authorized_ok := false;
+  end;
+  reset role;
+
+  -- 2. Outsider -> blocked.
+  if v_outsider is not null then
+    perform set_config('role','authenticated', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', v_outsider::text, 'role','authenticated')::text, true);
+    begin
+      perform public.set_profile_avatar(
+        v_profile, v_profile::text || '/hack.png',
+        'https://example.test/hack.png', 'hack', 10, 10, 10
+      );
+      unauthorized_blocked := false;
+    exception when others then
+      unauthorized_blocked := true;
+    end;
+    reset role;
+  else
+    unauthorized_blocked := true;
+  end if;
+
+  -- 3. Anon -> blocked.
+  perform set_config('role','anon', true);
+  perform set_config('request.jwt.claims', json_build_object('role','anon')::text, true);
+  begin
+    perform public.set_profile_avatar(
+      v_profile, v_profile::text || '/anon.png',
+      'https://example.test/anon.png', 'anon', 10, 10, 10
+    );
+    anon_blocked := false;
+  exception when others then
+    anon_blocked := true;
+  end;
+  reset role;
+
+  insert into _avatar_sec values (authorized_ok, unauthorized_blocked, anon_blocked, 'ok');
+end $$;
+
+select * from _avatar_sec;
+`
+
 export async function GET(req: Request) {
   const url = new URL(req.url)
   if (url.searchParams.get("guard") !== GUARD) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 })
   }
   const apply = url.searchParams.get("apply") === "1"
+  const verify = url.searchParams.get("verify") === "1"
 
   const publicUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
   const pgUrl = process.env.POSTGRES_URL_NON_POOLING || process.env.POSTGRES_URL
@@ -192,6 +278,53 @@ export async function GET(req: Request) {
     postgresRef: refOf(pgUrl ? `https://${new URL(pgUrl).host}` : null),
     matchesDevProject: refOf(publicUrl) === DEV_REF,
     hasPostgresUrl: Boolean(pgUrl),
+  }
+
+  if (verify) {
+    if (!pgUrl) {
+      return NextResponse.json(
+        { mode: "verify", identity, error: "no POSTGRES_URL_NON_POOLING in runtime" },
+        { status: 500 },
+      )
+    }
+    const { Client } = await import("pg")
+    const pg = new URL(pgUrl)
+    const client = new Client({
+      host: pg.hostname,
+      port: pg.port ? Number(pg.port) : 5432,
+      user: decodeURIComponent(pg.username),
+      password: decodeURIComponent(pg.password),
+      database: pg.pathname.replace(/^\//, "") || "postgres",
+      ssl: { rejectUnauthorized: false },
+    })
+    try {
+      await client.connect()
+      // Everything runs inside one transaction that is always rolled back,
+      // so production data is never mutated by this security check.
+      await client.query("begin")
+      const res = await client.query(VERIFY_SQL)
+      await client.query("rollback")
+      // Also confirm anon can read the view including avatar_url (discovery path).
+      const anonView = await client.query(
+        `select has_column_privilege('anon','public.public_profiles','avatar_url','SELECT') as anon_can_read_avatar_url`,
+      )
+      return NextResponse.json({
+        mode: "verify",
+        identity,
+        security: res.rows[0],
+        anon_can_read_avatar_url: anonView.rows[0]?.anon_can_read_avatar_url ?? null,
+      })
+    } catch (e) {
+      try {
+        await client.query("rollback")
+      } catch {}
+      const message = e instanceof Error ? e.message : String(e)
+      return NextResponse.json({ mode: "verify", identity, error: message }, { status: 500 })
+    } finally {
+      try {
+        await client.end()
+      } catch {}
+    }
   }
 
   if (!apply) {
