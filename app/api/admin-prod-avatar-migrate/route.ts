@@ -1,70 +1,249 @@
-import { readFile } from "node:fs/promises"
-import path from "node:path"
 import { NextResponse } from "next/server"
-
-// TEMPORARY one-off route to apply the profile-avatar migration to the
-// PRODUCTION Supabase project via the Management API. Reads the sensitive,
-// runtime-only SUPABASE_ACCESS_TOKEN + SUPABASE_PROD_PROJECT_REF from
-// process.env (not available in the sandbox shell). Delete after use.
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
+// TEMPORARY, guarded operational route used once to apply the additive,
+// idempotent profile-avatar migration to the production database using the
+// production runtime's own direct Postgres credentials. It never returns any
+// secret value. Delete this route after the migration is confirmed.
 const GUARD = "mig_7f3a9c21b8e4d6"
+const DEV_REF = "ecxundnkvwilsqokecdg"
 
-const MIGRATION_FILES = [
-  "supabase/migrations/20260926120000_0018_profile_avatar_media.sql",
-  "supabase/migrations/20260926123000_0019_profile_avatar_grants.sql",
-]
-
-const VERIFY_SQL = `select
-  (select count(*) from information_schema.columns where table_schema='public' and table_name='profiles' and column_name='avatar_media_id') as has_avatar_col,
-  (select count(*) from storage.buckets where id='profile-media') as has_bucket,
-  (select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname='set_profile_avatar') as has_rpc,
-  (select count(*) from information_schema.columns where table_schema='public' and table_name='public_profiles' and column_name='avatar_url') as view_has_avatar,
-  (select count(*) from pg_policies where schemaname='storage' and tablename='objects' and policyname like 'profile_media%') as storage_policies;`
-
-async function runQuery(ref: string, token: string, query: string) {
-  const res = await fetch(`https://api.supabase.com/v1/projects/${ref}/database/query`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ query }),
-  })
-  const text = await res.text()
-  return { status: res.status, ok: res.ok, body: text.slice(0, 4000) }
+function hostOf(u?: string | null) {
+  if (!u) return null
+  try {
+    return new URL(u).host
+  } catch {
+    return null
+  }
 }
 
-export async function GET(request: Request) {
-  const url = new URL(request.url)
+function refOf(u?: string | null) {
+  const h = hostOf(u)
+  return h ? h.split(".")[0] : null
+}
+
+const SQL_0018 = `
+set local search_path = public, extensions;
+
+alter table public.profiles
+  add column if not exists avatar_media_id uuid;
+alter table public.profiles
+  drop constraint if exists profiles_avatar_media_fk;
+alter table public.profiles
+  add constraint profiles_avatar_media_fk
+  foreign key (avatar_media_id) references public.media_assets(id) on delete set null;
+comment on column public.profiles.avatar_media_id is
+  'Profile avatar/photo. References the media_assets row holding the uploaded image.';
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'profile-media', 'profile-media', true, 2097152,
+  array['image/png', 'image/jpeg', 'image/webp']
+)
+on conflict (id) do update
+  set public = excluded.public,
+      file_size_limit = excluded.file_size_limit,
+      allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists profile_media_read on storage.objects;
+create policy profile_media_read on storage.objects
+  for select using (bucket_id = 'profile-media');
+
+drop policy if exists profile_media_insert on storage.objects;
+create policy profile_media_insert on storage.objects
+  for insert to authenticated
+  with check (
+    bucket_id = 'profile-media'
+    and public.has_profile_access(((storage.foldername(name))[1])::uuid, 'content_contributor')
+  );
+
+drop policy if exists profile_media_update on storage.objects;
+create policy profile_media_update on storage.objects
+  for update to authenticated
+  using (
+    bucket_id = 'profile-media'
+    and public.has_profile_access(((storage.foldername(name))[1])::uuid, 'content_contributor')
+  )
+  with check (
+    bucket_id = 'profile-media'
+    and public.has_profile_access(((storage.foldername(name))[1])::uuid, 'content_contributor')
+  );
+
+drop policy if exists profile_media_delete on storage.objects;
+create policy profile_media_delete on storage.objects
+  for delete to authenticated
+  using (
+    bucket_id = 'profile-media'
+    and public.has_profile_access(((storage.foldername(name))[1])::uuid, 'content_contributor')
+  );
+
+create or replace function public.set_profile_avatar(
+  p_profile_id uuid,
+  p_storage_path text,
+  p_public_url text,
+  p_alt_text text default null,
+  p_width integer default null,
+  p_height integer default null,
+  p_byte_size bigint default null
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_uid uuid := (select auth.uid());
+  v_account uuid;
+  v_media_id uuid;
+begin
+  if v_uid is null then
+    raise exception 'authentication required' using errcode = '42501';
+  end if;
+  if not public.has_profile_access(p_profile_id, 'content_contributor') then
+    raise exception 'not authorised to edit this profile' using errcode = '42501';
+  end if;
+
+  select id into v_account from public.user_accounts where id = v_uid;
+
+  insert into public.media_assets (
+    profile_id, storage_path, public_url, kind, alt_text, width, height, byte_size, uploaded_by
+  )
+  values (
+    p_profile_id, p_storage_path, p_public_url, 'image', p_alt_text, p_width, p_height, p_byte_size, v_account
+  )
+  returning id into v_media_id;
+
+  update public.profiles
+  set avatar_media_id = v_media_id,
+      updated_at = now()
+  where id = p_profile_id;
+
+  return v_media_id;
+end;
+$fn$;
+comment on function public.set_profile_avatar(uuid, text, text, text, integer, integer, bigint) is
+  'Record an uploaded profile avatar in media_assets and point profiles.avatar_media_id at it. content_contributor+ only.';
+
+revoke execute on function public.set_profile_avatar(uuid, text, text, text, integer, integer, bigint) from public, anon;
+grant execute on function public.set_profile_avatar(uuid, text, text, text, integer, integer, bigint) to authenticated;
+
+create or replace view public.public_profiles
+with (security_invoker = true) as
+select
+  p.id,
+  p.slug,
+  p.type,
+  p.display_name,
+  p.tagline,
+  p.verification_status,
+  p.location_label,
+  extensions.st_y(p.location_centroid::extensions.geometry) as location_lat,
+  extensions.st_x(p.location_centroid::extensions.geometry) as location_lon,
+  p.travel_radius_km,
+  p.published_at,
+  ma.public_url as avatar_url
+from public.profiles p
+left join public.media_assets ma on ma.id = p.avatar_media_id
+where p.visibility = 'public'
+  and p.lifecycle_status = 'active'
+  and p.deleted_at is null
+  and p.archived_at is null;
+comment on view public.public_profiles is
+  'Publicly-safe profile projection: coarse centroid only, never location_exact. avatar_url is the linked media asset public URL.';
+
+grant select on public.public_profiles to anon, authenticated;
+`
+
+const SQL_0019 = `
+set local search_path = public, extensions;
+
+grant select (avatar_media_id) on table public.profiles to anon, authenticated;
+
+grant select (
+  id,
+  profile_id,
+  storage_path,
+  public_url,
+  kind,
+  alt_text,
+  width,
+  height,
+  byte_size,
+  created_at
+) on table public.media_assets to anon, authenticated;
+`
+
+export async function GET(req: Request) {
+  const url = new URL(req.url)
   if (url.searchParams.get("guard") !== GUARD) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 })
   }
+  const apply = url.searchParams.get("apply") === "1"
 
-  const ref = process.env.SUPABASE_PROD_PROJECT_REF
-  const token = process.env.SUPABASE_ACCESS_TOKEN
-  const envPresence = { hasRef: Boolean(ref), hasToken: Boolean(token) }
-  if (!ref || !token) {
-    return NextResponse.json({ envPresence, error: "missing prod env vars at runtime" }, { status: 500 })
+  const publicUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
+  const pgUrl = process.env.POSTGRES_URL_NON_POOLING || process.env.POSTGRES_URL
+
+  const identity = {
+    supabaseHost: hostOf(publicUrl),
+    supabaseRef: refOf(publicUrl),
+    prodRefEnv: process.env.SUPABASE_PROD_PROJECT_REF || null,
+    postgresRef: refOf(pgUrl ? `https://${new URL(pgUrl).host}` : null),
+    matchesDevProject: refOf(publicUrl) === DEV_REF,
+    hasPostgresUrl: Boolean(pgUrl),
   }
 
-  try {
-    const applied: Array<{ file: string; status: number; ok: boolean; body: string }> = []
-    for (const rel of MIGRATION_FILES) {
-      const sql = await readFile(path.join(process.cwd(), rel), "utf8")
-      const result = await runQuery(ref, token, sql)
-      applied.push({ file: rel, ...result })
-      if (!result.ok) {
-        return NextResponse.json({ envPresence, applied }, { status: 500 })
-      }
-    }
-    // Ask PostgREST to refresh its schema cache, then verify.
-    await runQuery(ref, token, "notify pgrst, 'reload schema';")
-    const verify = await runQuery(ref, token, VERIFY_SQL)
-    return NextResponse.json({ envPresence, applied, verify }, { status: 200 })
-  } catch (error) {
+  if (!apply) {
+    return NextResponse.json({ mode: "inspect", identity })
+  }
+
+  if (!pgUrl) {
     return NextResponse.json(
-      { envPresence, error: error instanceof Error ? error.message : String(error) },
+      { mode: "apply", identity, error: "no POSTGRES_URL_NON_POOLING in runtime" },
       { status: 500 },
     )
+  }
+
+  const { Client } = await import("pg")
+  const client = new Client({ connectionString: pgUrl, ssl: { rejectUnauthorized: false } })
+  try {
+    await client.connect()
+    const before = await client.query(
+      `select current_database() as db,
+              (select count(*) from information_schema.columns
+                 where table_schema='public' and table_name='profiles'
+                   and column_name='avatar_media_id') as has_avatar,
+              (select count(*) from information_schema.tables
+                 where table_schema='public' and table_name='profiles') as has_profiles`,
+    )
+    await client.query("begin")
+    await client.query(SQL_0018)
+    await client.query(SQL_0019)
+    await client.query("commit")
+    // Ask PostgREST to refresh its schema cache so avatar_url is queryable.
+    await client.query(`notify pgrst, 'reload schema'`)
+    const after = await client.query(
+      `select (select count(*) from information_schema.columns
+                 where table_schema='public' and table_name='profiles'
+                   and column_name='avatar_media_id') as has_avatar,
+              (select count(*) from storage.buckets where id='profile-media') as has_bucket,
+              (select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+                 where n.nspname='public' and p.proname='set_profile_avatar') as has_rpc,
+              (select count(*) from information_schema.columns
+                 where table_schema='public' and table_name='public_profiles'
+                   and column_name='avatar_url') as view_has_avatar`,
+    )
+    return NextResponse.json({ mode: "apply", identity, before: before.rows[0], after: after.rows[0] })
+  } catch (e) {
+    try {
+      await client.query("rollback")
+    } catch {}
+    const message = e instanceof Error ? e.message : String(e)
+    return NextResponse.json({ mode: "apply", identity, error: message }, { status: 500 })
+  } finally {
+    try {
+      await client.end()
+    } catch {}
   }
 }
