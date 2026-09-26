@@ -20,8 +20,23 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "no POSTGRES_URL_NON_POOLING" }, { status: 500 })
   }
 
+  // Parse discrete fields from the DIRECT (non-pooling) URL so:
+  //  1. NOTIFY reaches PostgREST (the transaction pooler silently drops NOTIFY), and
+  //  2. node-postgres does not inherit sslmode from the connection string (which
+  //     would override the ssl object below and trip the self-signed-cert check).
+  let parsed: URL
+  try {
+    parsed = new URL(conn)
+  } catch {
+    return NextResponse.json({ error: "POSTGRES_URL_NON_POOLING is not a valid URL" }, { status: 500 })
+  }
+
   const client = new Client({
-    connectionString: conn,
+    host: parsed.hostname,
+    port: parsed.port ? Number(parsed.port) : 5432,
+    database: parsed.pathname.replace(/^\//, "") || "postgres",
+    user: decodeURIComponent(parsed.username),
+    password: decodeURIComponent(parsed.password),
     ssl: { rejectUnauthorized: false },
   })
 
