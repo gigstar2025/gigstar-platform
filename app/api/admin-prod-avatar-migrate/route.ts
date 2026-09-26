@@ -302,7 +302,12 @@ export async function GET(req: Request) {
       // Everything runs inside one transaction that is always rolled back,
       // so production data is never mutated by this security check.
       await client.query("begin")
+      // A multi-statement query string makes node-postgres return an ARRAY of
+      // result objects (one per statement). The security row is the final
+      // `select * from _avatar_sec`, so read the last result.
       const res = await client.query(VERIFY_SQL)
+      const results = Array.isArray(res) ? res : [res]
+      const last = results[results.length - 1]
       await client.query("rollback")
       // Also confirm anon can read the view including avatar_url (discovery path).
       const anonView = await client.query(
@@ -311,7 +316,7 @@ export async function GET(req: Request) {
       return NextResponse.json({
         mode: "verify",
         identity,
-        security: res.rows[0],
+        security: last?.rows?.[0] ?? null,
         anon_can_read_avatar_url: anonView.rows[0]?.anon_can_read_avatar_url ?? null,
       })
     } catch (e) {
