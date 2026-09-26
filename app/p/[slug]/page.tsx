@@ -2,7 +2,7 @@ import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 import { SiteHeader } from "@/components/site/site-header"
 import { SiteFooter } from "@/components/site/site-footer"
-import { ShowcaseHeader } from "@/components/profile/showcase/showcase-header"
+import { ShowcaseHeaderClient } from "@/components/profile/showcase/showcase-header-client"
 import { SectionNav } from "@/components/profile/showcase/section-nav"
 import { ShowcaseBody } from "@/components/profile/showcase/showcase-body"
 import { ModuleView } from "@/components/profile/module-view"
@@ -97,7 +97,7 @@ export default async function ShowcaseProfilePage({
     <div className="flex min-h-dvh flex-col bg-background">
       <SiteHeader />
       <main className="flex-1">
-        <ShowcaseHeader profile={profile} />
+        <ShowcaseHeaderClient profile={profile} />
         <div className="mx-auto mt-8 max-w-5xl px-4 sm:px-6">
           <SectionNav sections={profile.sections} />
         </div>

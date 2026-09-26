@@ -38,21 +38,27 @@ export function IdentityPanel({ draft, errors, update }: Props) {
         description="Your public name, tagline, images and headline details. These appear in the profile header and across discovery."
       />
 
-      <section className="grid gap-5 rounded-xl border border-border bg-card p-5 sm:grid-cols-2">
-        <ImageField
-          label="Cover image"
-          hint="Wide banner behind the header (recommended 1600×600)."
-          value={base.cover}
-          aspect="wide"
-          onChange={(src) => set('cover', src ?? '')}
-        />
-        <ImageField
-          label={isLogo ? 'Logo' : 'Profile photo'}
-          hint={isLogo ? 'Square logo shown in the header.' : 'Square headshot shown in the header.'}
-          value={base.avatar}
-          aspect="square"
-          onChange={(src) => set('avatar', src ?? '')}
-        />
+      <section className="flex flex-col gap-5 rounded-xl border border-border bg-card p-5">
+        <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-700 dark:text-amber-300">
+          Uploaded images are a browser-local demo: they&apos;re saved with your draft in this browser only (not uploaded
+          to a server) and appear on the public profile when you reopen it on this device.
+        </p>
+        <div className="grid gap-5 sm:grid-cols-2">
+          <ImageField
+            label="Cover image"
+            hint="Wide banner behind the header (recommended 1600×600)."
+            value={base.cover}
+            aspect="wide"
+            onChange={(src) => set('cover', src ?? '')}
+          />
+          <ImageField
+            label={isLogo ? 'Logo' : 'Profile photo'}
+            hint={isLogo ? 'Square logo shown in the header.' : 'Square headshot shown in the header.'}
+            value={base.avatar}
+            aspect="square"
+            onChange={(src) => set('avatar', src ?? '')}
+          />
+        </div>
       </section>
 
       <section className="flex flex-col gap-5 rounded-xl border border-border bg-card p-5">
