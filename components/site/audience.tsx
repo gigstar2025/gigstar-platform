@@ -108,7 +108,7 @@ export function Audience() {
             <Button
               variant="outline"
               nativeButton={false}
-              render={<a href="/profile/luna-vega/edit" />}
+              render={<a href="/profiles/manage" />}
             >
               Try the profile editor
             </Button>
