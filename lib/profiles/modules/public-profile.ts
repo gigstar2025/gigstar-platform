@@ -26,6 +26,7 @@ export interface PublicModularProfile {
   displayName: string
   tagline: string | null
   locationLabel: string | null
+  avatarUrl: string | null
   publishedAt: string | null
   modules: ProfileModule[]
 }
@@ -55,7 +56,7 @@ export async function getPublicModularProfile(
 
   const { data: profile, error: profileError } = await supabase
     .from("public_profiles")
-    .select("id, slug, type, display_name, tagline, location_label, published_at")
+    .select("id, slug, type, display_name, tagline, location_label, published_at, avatar_url")
     .eq("slug", slug)
     .maybeSingle()
 
@@ -91,6 +92,7 @@ export async function getPublicModularProfile(
     displayName: profile.display_name as string,
     tagline: (profile.tagline as string | null) ?? null,
     locationLabel: (profile.location_label as string | null) ?? null,
+    avatarUrl: (profile.avatar_url as string | null) ?? null,
     publishedAt: (profile.published_at as string | null) ?? null,
     modules,
   }
