@@ -8,6 +8,7 @@ import type {
   ProfileType,
   ProfileVisibility,
 } from "@/lib/db/types"
+import { filterEditable } from "@/lib/profiles/roles"
 
 // The platform cap on how many *active* (non-archived) profiles a single
 // account may hold. Mirrors the limit enforced server-side by create_profile
@@ -116,9 +117,11 @@ export async function loadProfileManagerData(
   if (error) throw error
 
   const rows = (data ?? []) as unknown as MembershipRow[]
-  const all = rows
-    .map(toManagedProfile)
-    .filter((p): p is ManagedProfile => p != null)
+  const all = filterEditable(
+    rows
+      .map(toManagedProfile)
+      .filter((p): p is ManagedProfile => p != null),
+  )
 
   const active = all
     .filter((p) => !p.isArchived)

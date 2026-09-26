@@ -12,7 +12,7 @@ const NAV_LINKS = [
   { label: 'Home', href: '/' },
   { label: 'Find gigs', href: '/gigs' },
   { label: 'Profiles', href: '/profiles' },
-  { label: 'Profile editor', href: '/profile/luna-vega/edit' },
+    { label: 'My profiles', href: '/profiles/manage' },
   { label: 'For Artists', href: '/#artists' },
   { label: 'For Venues', href: '/#venues' },
   { label: 'How it works', href: '/#how-it-works' },

@@ -8,6 +8,8 @@ import { getShowcaseProfile, SHOWCASE_PROFILES } from '@/lib/profiles/showcase'
 import { MANAGED_PROFILES } from '@/lib/profiles/editor/demo-account'
 import { PROFILE_TYPE_OPTIONS } from '@/lib/onboarding/constants'
 import { createClient } from '@/lib/supabase/server'
+import { roleCanEdit } from '@/lib/profiles/roles'
+import type { MembershipRole } from '@/lib/db/types'
 import { MODULAR_PROFILES_FLOW } from '@/lib/flags'
 import { getEditorModules } from '@/lib/profiles/modules/persistence'
 import { isProfileType } from '@/lib/profiles/modules/registry'
@@ -54,10 +56,12 @@ export default async function EditProfilePage({
   }
 
   // Not a showcase slug: this is a real, DB-backed profile (e.g. one just
-  // created through onboarding). The editor is not yet wired to the database,
-  // so we confirm ownership via RLS and render the interim landing. RLS scopes
-  // this SELECT to the owner/members of a draft, so unauthorized or unknown
-  // slugs fall through to notFound().
+  // created through onboarding). Authorization is enforced explicitly here, not
+  // left to RLS row-visibility: a *published* profile is world-readable via the
+  // profiles RLS read policy, so selecting it by slug does NOT prove the caller
+  // may edit it. We therefore require the current user to hold an active
+  // membership with an editable role (owner/administrator/editor) on this exact
+  // profile before rendering any editor.
   const supabase = await createClient()
   const {
     data: { user },
@@ -70,6 +74,16 @@ export default async function EditProfilePage({
     .eq('slug', slug)
     .maybeSingle()
   if (!owned) notFound()
+
+  // Explicit, server-side membership + role check scoped to (user, profile).
+  const { data: membership } = await supabase
+    .from('profile_memberships')
+    .select('role')
+    .eq('profile_id', owned.id)
+    .eq('user_id', user.id)
+    .eq('status', 'active')
+    .maybeSingle()
+  if (!roleCanEdit(membership?.role as MembershipRole | undefined)) notFound()
 
   // Modular flow (PR-5b): render the persisted, DB-backed module editor for
   // profile types that support modules. Ownership for both the initial load and
