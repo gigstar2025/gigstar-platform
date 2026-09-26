@@ -16,9 +16,11 @@ interface Props {
 }
 
 // Browser-local demo upload limits. Images are stored as data URLs inside the
-// localStorage draft on THIS device only — nothing is uploaded to a server —
-// so the cap is kept small to stay within the ~5MB localStorage budget.
-const MAX_UPLOAD_BYTES = 1.5 * 1024 * 1024
+// localStorage draft on THIS device only — nothing is uploaded to a server.
+// A data URL is base64, ~1.37x the raw bytes, so a 1MB file becomes ~1.37MB of
+// string; a cover + avatar together stay well under the ~5MB origin budget.
+// The cap is deliberately small so a save can't blow the localStorage quota.
+const MAX_UPLOAD_BYTES = 1 * 1024 * 1024
 const ACCEPTED_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/avif']
 
 function formatMb(bytes: number): string {
@@ -40,16 +42,28 @@ export function ImageField({ label, value, onChange, hint, aspect = 'wide', remo
   const [reading, setReading] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  async function handleFile(file: File | undefined) {
+  async function handleFile(file: File | undefined, input: HTMLInputElement | null) {
     setError(null)
-    if (!file) return
+    // Reset the input only AFTER the read finishes — clearing input.value while
+    // the FileReader is still reading aborts the read (fires onerror). Resetting
+    // afterwards still lets the user re-select the same file to re-trigger change.
+    const resetInput = () => {
+      if (input) input.value = ''
+    }
+
+    if (!file) {
+      resetInput()
+      return
+    }
 
     if (!ACCEPTED_TYPES.includes(file.type)) {
       setError('Unsupported file type. Use PNG, JPEG, WebP, GIF or AVIF.')
+      resetInput()
       return
     }
     if (file.size > MAX_UPLOAD_BYTES) {
       setError(`Image is too large (${formatMb(file.size)}). Maximum is ${formatMb(MAX_UPLOAD_BYTES)}.`)
+      resetInput()
       return
     }
 
@@ -61,6 +75,7 @@ export function ImageField({ label, value, onChange, hint, aspect = 'wide', remo
       setError('Could not read that image. Please try another file.')
     } finally {
       setReading(false)
+      resetInput()
     }
   }
 
@@ -92,9 +107,7 @@ export function ImageField({ label, value, onChange, hint, aspect = 'wide', remo
             className="sr-only"
             aria-label={`Upload ${label}`}
             onChange={(e) => {
-              void handleFile(e.target.files?.[0])
-              // Reset so re-selecting the same file still fires onChange.
-              e.target.value = ''
+              void handleFile(e.target.files?.[0], e.currentTarget)
             }}
           />
           <Button variant="outline" size="sm" onClick={() => inputRef.current?.click()} disabled={reading}>
