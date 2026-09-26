@@ -40,6 +40,7 @@ interface PublicProfileRow {
   location_lat: number | null
   location_lon: number | null
   travel_radius_km: number | null
+  avatar_url: string | null
 }
 
 function isDiscoveryType(t: string): t is DiscoveryType {
@@ -88,7 +89,7 @@ function toDiscoveryProfile(row: PublicProfileRow): DiscoveryProfile | null {
     town: label,
     lat,
     lng,
-    avatar: DEFAULT_IMG[row.type].avatar,
+    avatar: row.avatar_url ?? DEFAULT_IMG[row.type].avatar,
     cover: DEFAULT_IMG[row.type].cover,
     description: row.tagline ?? '',
     genres: [],
@@ -115,7 +116,7 @@ export async function fetchLiveDiscoveryProfiles(): Promise<DiscoveryProfile[]> 
     const { data, error } = await supabase
       .from('public_profiles')
       .select(
-        'id, slug, type, display_name, tagline, verification_status, location_label, location_lat, location_lon, travel_radius_km',
+        'id, slug, type, display_name, tagline, verification_status, location_label, location_lat, location_lon, travel_radius_km, avatar_url',
       )
       .order('published_at', { ascending: false, nullsFirst: false })
 

@@ -39,9 +39,10 @@ export function IdentityPanel({ draft, errors, update }: Props) {
       />
 
       <section className="flex flex-col gap-5 rounded-xl border border-border bg-card p-5">
-        <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-700 dark:text-amber-300">
-          Uploaded images are a browser-local demo: they&apos;re saved with your draft in this browser only (not uploaded
-          to a server) and appear on the public profile when you reopen it on this device.
+        <p className="rounded-lg border border-border bg-muted/40 p-3 text-xs leading-relaxed text-muted-foreground">
+          This is an example profile for the showcase. Images picked here are kept with your local draft only. Real
+          profiles now upload a profile photo to our servers from the profile editor, where it&apos;s saved and shown
+          publicly.
         </p>
         <div className="grid gap-5 sm:grid-cols-2">
           <ImageField

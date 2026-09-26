@@ -66,7 +66,7 @@ export default async function EditProfilePage({
 
   const { data: owned } = await supabase
     .from('profiles')
-    .select('id, slug, display_name, type')
+    .select('id, slug, display_name, type, avatar_media_id')
     .eq('slug', slug)
     .maybeSingle()
   if (!owned) notFound()
@@ -76,6 +76,19 @@ export default async function EditProfilePage({
   // every write is enforced inside the SECURITY DEFINER RPCs, not here.
   if (MODULAR_PROFILES_FLOW && isProfileType(owned.type)) {
     const initialModules = await getEditorModules(owned.id)
+
+    // Current avatar (if any) for the uploader preview. RLS lets a member read
+    // their own profile's media even while the profile is still a draft.
+    let initialAvatarUrl: string | null = null
+    if (owned.avatar_media_id) {
+      const { data: media } = await supabase
+        .from('media_assets')
+        .select('public_url')
+        .eq('id', owned.avatar_media_id)
+        .maybeSingle()
+      initialAvatarUrl = (media?.public_url as string | null) ?? null
+    }
+
     return (
       <div className="flex min-h-dvh flex-col bg-background">
         <SiteHeader />
@@ -86,6 +99,7 @@ export default async function EditProfilePage({
             displayName={owned.display_name}
             profileType={owned.type}
             initialModules={initialModules}
+            initialAvatarUrl={initialAvatarUrl}
           />
         </main>
       </div>

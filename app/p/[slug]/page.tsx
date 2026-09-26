@@ -58,18 +58,28 @@ export default async function ShowcaseProfilePage({
         <div className="flex min-h-dvh flex-col bg-background">
           <SiteHeader />
           <main className="mx-auto w-full max-w-3xl flex-1 px-4 pb-20 pt-6 sm:px-6">
-            <header className="flex flex-col gap-3">
-              <h1 className="font-display text-3xl font-bold tracking-tight text-balance text-foreground sm:text-4xl">
-                {modular.displayName}
-              </h1>
-              {modular.tagline ? (
-                <p className="max-w-2xl text-pretty leading-relaxed text-muted-foreground">
-                  {modular.tagline}
-                </p>
+            <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-5">
+              {modular.avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={modular.avatarUrl || "/placeholder.svg"}
+                  alt={`${modular.displayName} profile photo`}
+                  className="size-24 shrink-0 rounded-full border border-border object-cover"
+                />
               ) : null}
-              {modular.locationLabel ? (
-                <p className="text-sm text-muted-foreground">{modular.locationLabel}</p>
-              ) : null}
+              <div className="flex flex-col gap-3">
+                <h1 className="font-display text-3xl font-bold tracking-tight text-balance text-foreground sm:text-4xl">
+                  {modular.displayName}
+                </h1>
+                {modular.tagline ? (
+                  <p className="max-w-2xl text-pretty leading-relaxed text-muted-foreground">
+                    {modular.tagline}
+                  </p>
+                ) : null}
+                {modular.locationLabel ? (
+                  <p className="text-sm text-muted-foreground">{modular.locationLabel}</p>
+                ) : null}
+              </div>
             </header>
 
             {modular.modules.length > 0 ? (

@@ -45,6 +45,7 @@ import { validateModuleContent, type ValidationError } from '@/lib/profiles/modu
 import { moduleToRenderModule } from '@/lib/profiles/modules/render-adapter'
 import { saveModuleDraftAction, publishModulesAction } from '@/lib/profiles/modules/actions'
 import { ModuleView } from '@/components/profile/module-view'
+import { AvatarUploader } from './avatar-uploader'
 import {
   AudioForm,
   GigsForm,
@@ -69,6 +70,7 @@ interface Props {
   displayName: string
   profileType: ProfileType
   initialModules: InitialEditorModule[]
+  initialAvatarUrl: string | null
 }
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error'
@@ -93,9 +95,11 @@ export function DbModuleEditor({
   displayName,
   profileType,
   initialModules,
+  initialAvatarUrl,
 }: Props) {
   const router = useRouter()
   const eligibleKeys = useMemo(() => modulesForProfileType(profileType), [profileType])
+  const isLogoProfile = profileType === 'venue' || profileType === 'organiser'
 
   const [modules, setModules] = useState<Record<string, ModuleState>>(() => {
     const initial: Record<string, ModuleState> = {}
@@ -237,6 +241,12 @@ export function DbModuleEditor({
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,32rem)]">
         <div className="flex flex-col gap-5">
+          <AvatarUploader
+            profileId={profileId}
+            slug={slug}
+            initialAvatarUrl={initialAvatarUrl}
+            isLogo={isLogoProfile}
+          />
           {eligibleKeys.map((key) => (
             <ModuleCard
               key={key}
