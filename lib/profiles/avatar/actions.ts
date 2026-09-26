@@ -32,6 +32,12 @@ export interface AvatarUploadResult {
   ok: boolean
   url?: string
   error?: string
+  /**
+   * Safe, non-secret diagnostic describing the exact failing step and storage
+   * status/message. Surfaced so a production upload failure can be triaged
+   * from the UI without server-log access. Never contains credentials.
+   */
+  detail?: string
 }
 
 export async function uploadProfileAvatarAction(formData: FormData): Promise<AvatarUploadResult> {
@@ -74,8 +80,9 @@ export async function uploadProfileAvatarAction(formData: FormData): Promise<Ava
     // 'permission'; a missing bucket or transient error surfaces distinctly so
     // environment misconfiguration is not mislabeled as an access problem.
     const described = describeStorageUploadError(uploadError as { message?: string; status?: number; statusCode?: string | number })
-    console.log('[v0] avatar upload storage error:', described.kind, '-', uploadError.message)
-    return { ok: false, error: described.message }
+    const detail = `step=storage.upload ${described.detail}`
+    console.log('[v0] avatar upload storage error:', detail)
+    return { ok: false, error: described.message, detail }
   }
 
   const {
@@ -93,10 +100,19 @@ export async function uploadProfileAvatarAction(formData: FormData): Promise<Ava
   })
 
   if (rpcError) {
-    console.log('[v0] set_profile_avatar rpc error:', rpcError.message)
+    const rpcAny = rpcError as { message?: string; code?: string; details?: string; hint?: string }
+    const detail = [
+      'step=set_profile_avatar',
+      rpcAny.code ? `code=${rpcAny.code}` : '',
+      rpcAny.message ? `msg=${rpcAny.message}` : '',
+      rpcAny.details ? `details=${rpcAny.details}` : '',
+    ]
+      .filter(Boolean)
+      .join(' ')
+    console.log('[v0] set_profile_avatar rpc error:', detail)
     // Best-effort cleanup of the orphaned object; ignore failures.
     await supabase.storage.from('profile-media').remove([path])
-    return { ok: false, error: 'Could not save the image to your profile.' }
+    return { ok: false, error: 'Could not save the image to your profile.', detail }
   }
 
   if (typeof slug === 'string' && slug) {

@@ -34,12 +34,14 @@ export function AvatarUploader({ profileId, slug, initialAvatarUrl, isLogo }: Pr
   const [previewUrl, setPreviewUrl] = useState<string | null>(initialAvatarUrl)
   const [status, setStatus] = useState<Status>('idle')
   const [error, setError] = useState<string | null>(null)
+  const [detail, setDetail] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
   const label = isLogo ? 'Logo' : 'Profile photo'
 
   function handleFile(file: File) {
     setError(null)
+    setDetail(null)
 
     if (!ALLOWED_TYPES.includes(file.type)) {
       setStatus('error')
@@ -74,6 +76,7 @@ export function AvatarUploader({ profileId, slug, initialAvatarUrl, isLogo }: Pr
         setPreviewUrl(initialAvatarUrl)
         setStatus('error')
         setError(result.error ?? 'Upload failed.')
+        setDetail(result.detail ?? null)
       }
     })
   }
@@ -141,10 +144,17 @@ export function AvatarUploader({ profileId, slug, initialAvatarUrl, isLogo }: Pr
           </div>
           <p className="text-xs text-muted-foreground">PNG, JPG, or WebP. Up to 2MB.</p>
           {status === 'error' && error ? (
-            <p className="inline-flex items-start gap-1.5 text-xs font-medium text-destructive">
-              <AlertCircle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-              {error}
-            </p>
+            <div className="flex flex-col gap-1">
+              <p className="inline-flex items-start gap-1.5 text-xs font-medium text-destructive">
+                <AlertCircle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+                {error}
+              </p>
+              {detail ? (
+                <p className="pl-5 font-mono text-[11px] leading-relaxed text-muted-foreground break-all">
+                  {detail}
+                </p>
+              ) : null}
+            </div>
           ) : null}
         </div>
       </div>

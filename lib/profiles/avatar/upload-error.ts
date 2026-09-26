@@ -16,12 +16,33 @@ export type UploadErrorKind = 'permission' | 'missing_bucket' | 'conflict' | 'un
 export interface DescribedUploadError {
   kind: UploadErrorKind
   message: string
+  /**
+   * Safe, non-secret diagnostic string (kind + HTTP status/code + raw storage
+   * message). Storage error messages describe the failure class only
+   * (e.g. "new row violates row-level security policy", "Bucket not found")
+   * and never contain credentials, so they are safe to surface to the client
+   * and logs to make production incidents diagnosable without log access.
+   */
+  detail: string
 }
 
 interface RawStorageError {
   message?: string
   status?: number
   statusCode?: string | number
+}
+
+function buildDetail(kind: UploadErrorKind, raw: RawStorageError | null | undefined): string {
+  const parts = [`kind=${kind}`]
+  const status = raw?.status ?? raw?.statusCode
+  if (status !== undefined && status !== null && `${status}` !== '0' && `${status}` !== '') {
+    parts.push(`status=${status}`)
+  }
+  const rawMessage = raw?.message?.trim()
+  if (rawMessage) {
+    parts.push(`msg=${rawMessage}`)
+  }
+  return parts.join(' ')
 }
 
 export function describeStorageUploadError(raw: RawStorageError | null | undefined): DescribedUploadError {
@@ -40,6 +61,7 @@ export function describeStorageUploadError(raw: RawStorageError | null | undefin
     return {
       kind: 'permission',
       message: 'Upload failed. You may not have permission to edit this profile.',
+      detail: buildDetail('permission', raw),
     }
   }
 
@@ -47,6 +69,7 @@ export function describeStorageUploadError(raw: RawStorageError | null | undefin
     return {
       kind: 'missing_bucket',
       message: 'Upload failed: profile media storage is not available right now. Please try again later or contact support.',
+      detail: buildDetail('missing_bucket', raw),
     }
   }
 
@@ -54,6 +77,7 @@ export function describeStorageUploadError(raw: RawStorageError | null | undefin
     return {
       kind: 'conflict',
       message: 'Upload failed: that image already exists. Please try again.',
+      detail: buildDetail('conflict', raw),
     }
   }
 
@@ -62,5 +86,6 @@ export function describeStorageUploadError(raw: RawStorageError | null | undefin
     message: rawMessage
       ? `Upload failed: ${rawMessage}`
       : 'Upload failed. Please try again.',
+    detail: buildDetail('unknown', raw),
   }
 }
