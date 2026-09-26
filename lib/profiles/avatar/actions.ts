@@ -19,6 +19,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { describeStorageUploadError } from '@/lib/profiles/avatar/upload-error'
 
 const MAX_BYTES = 2 * 1024 * 1024 // 2 MiB — matches the bucket file_size_limit.
 const EXT_BY_TYPE: Record<string, string> = {
@@ -31,6 +32,12 @@ export interface AvatarUploadResult {
   ok: boolean
   url?: string
   error?: string
+  /**
+   * Safe, non-secret diagnostic describing the exact failing step and storage
+   * status/message. Surfaced so a production upload failure can be triaged
+   * from the UI without server-log access. Never contains credentials.
+   */
+  detail?: string
 }
 
 export async function uploadProfileAvatarAction(formData: FormData): Promise<AvatarUploadResult> {
@@ -68,9 +75,14 @@ export async function uploadProfileAvatarAction(formData: FormData): Promise<Ava
     .upload(path, file, { contentType: file.type, upsert: false })
 
   if (uploadError) {
-    // RLS rejection (not a member) surfaces here as a permission error.
-    console.log('[v0] avatar upload storage error:', uploadError.message)
-    return { ok: false, error: 'Upload failed. You may not have permission to edit this profile.' }
+    // Classify the real storage failure instead of always blaming permissions.
+    // An RLS rejection (not a member, or a missing INSERT policy) maps to
+    // 'permission'; a missing bucket or transient error surfaces distinctly so
+    // environment misconfiguration is not mislabeled as an access problem.
+    const described = describeStorageUploadError(uploadError as { message?: string; status?: number; statusCode?: string | number })
+    const detail = `step=storage.upload ${described.detail}`
+    console.log('[v0] avatar upload storage error:', detail)
+    return { ok: false, error: described.message, detail }
   }
 
   const {
@@ -88,10 +100,19 @@ export async function uploadProfileAvatarAction(formData: FormData): Promise<Ava
   })
 
   if (rpcError) {
-    console.log('[v0] set_profile_avatar rpc error:', rpcError.message)
+    const rpcAny = rpcError as { message?: string; code?: string; details?: string; hint?: string }
+    const detail = [
+      'step=set_profile_avatar',
+      rpcAny.code ? `code=${rpcAny.code}` : '',
+      rpcAny.message ? `msg=${rpcAny.message}` : '',
+      rpcAny.details ? `details=${rpcAny.details}` : '',
+    ]
+      .filter(Boolean)
+      .join(' ')
+    console.log('[v0] set_profile_avatar rpc error:', detail)
     // Best-effort cleanup of the orphaned object; ignore failures.
     await supabase.storage.from('profile-media').remove([path])
-    return { ok: false, error: 'Could not save the image to your profile.' }
+    return { ok: false, error: 'Could not save the image to your profile.', detail }
   }
 
   if (typeof slug === 'string' && slug) {
