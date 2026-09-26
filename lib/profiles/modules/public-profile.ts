@@ -56,7 +56,7 @@ export async function getPublicModularProfile(
 
   const { data: profile, error: profileError } = await supabase
     .from("public_profiles")
-    .select("id, slug, type, display_name, tagline, location_label, published_at, avatar_url")
+    .select("id, slug, type, display_name, tagline, location_label, published_at")
     .eq("slug", slug)
     .maybeSingle()
 
@@ -64,6 +64,13 @@ export async function getPublicModularProfile(
     throw new Error(`Failed to load public profile: ${profileError.message}`)
   }
   if (!profile) return null
+
+  // Avatar is read from the canonical media_assets table (not the
+  // public_profiles.avatar_url view column) so the page stays resilient
+  // regardless of the PostgREST view-schema cache. The upload action stores
+  // avatars at `<profileId>/avatar-<timestamp>.<ext>`, so the newest row
+  // matching that path prefix for this profile is the current avatar.
+  const avatarUrl = await loadProfileAvatarUrl(supabase, profile.id as string)
 
   const { data: moduleRows, error: modulesError } = await supabase
     .from("public_profile_modules")
@@ -92,8 +99,38 @@ export async function getPublicModularProfile(
     displayName: profile.display_name as string,
     tagline: (profile.tagline as string | null) ?? null,
     locationLabel: (profile.location_label as string | null) ?? null,
-    avatarUrl: (profile.avatar_url as string | null) ?? null,
+    avatarUrl,
     publishedAt: (profile.published_at as string | null) ?? null,
     modules,
+  }
+}
+
+/**
+ * Resolve a profile's current avatar public URL from media_assets by the
+ * upload path convention `<profileId>/avatar-<timestamp>.<ext>`. Never throws:
+ * a failure or missing asset yields null so the public page still renders.
+ */
+async function loadProfileAvatarUrl(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  profileId: string,
+): Promise<string | null> {
+  try {
+    const { data, error } = await supabase
+      .from("media_assets")
+      .select("public_url, storage_path, created_at")
+      .eq("profile_id", profileId)
+      .like("storage_path", `${profileId}/avatar-%`)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (error) {
+      console.log("[v0] loadProfileAvatarUrl error:", error.message)
+      return null
+    }
+    return (data?.public_url as string | null) ?? null
+  } catch (err) {
+    console.log("[v0] loadProfileAvatarUrl threw:", (err as Error).message)
+    return null
   }
 }

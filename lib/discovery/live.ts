@@ -40,7 +40,6 @@ interface PublicProfileRow {
   location_lat: number | null
   location_lon: number | null
   travel_radius_km: number | null
-  avatar_url: string | null
 }
 
 function isDiscoveryType(t: string): t is DiscoveryType {
@@ -62,7 +61,10 @@ function nearestRegion(lat: number, lng: number): Region {
   return best
 }
 
-function toDiscoveryProfile(row: PublicProfileRow): DiscoveryProfile | null {
+function toDiscoveryProfile(
+  row: PublicProfileRow,
+  avatarUrl: string | null,
+): DiscoveryProfile | null {
   if (!isDiscoveryType(row.type)) return null
 
   // Real profiles should always have a coarse centroid; fall back to a sensible
@@ -89,7 +91,7 @@ function toDiscoveryProfile(row: PublicProfileRow): DiscoveryProfile | null {
     town: label,
     lat,
     lng,
-    avatar: row.avatar_url ?? DEFAULT_IMG[row.type].avatar,
+    avatar: avatarUrl ?? DEFAULT_IMG[row.type].avatar,
     cover: DEFAULT_IMG[row.type].cover,
     description: row.tagline ?? '',
     genres: [],
@@ -116,7 +118,7 @@ export async function fetchLiveDiscoveryProfiles(): Promise<DiscoveryProfile[]> 
     const { data, error } = await supabase
       .from('public_profiles')
       .select(
-        'id, slug, type, display_name, tagline, verification_status, location_label, location_lat, location_lon, travel_radius_km, avatar_url',
+        'id, slug, type, display_name, tagline, verification_status, location_label, location_lat, location_lon, travel_radius_km',
       )
       .order('published_at', { ascending: false, nullsFirst: false })
 
@@ -125,11 +127,61 @@ export async function fetchLiveDiscoveryProfiles(): Promise<DiscoveryProfile[]> 
       return []
     }
 
-    return (data ?? [])
-      .map((row) => toDiscoveryProfile(row as PublicProfileRow))
+    const rows = (data ?? []) as PublicProfileRow[]
+
+    // Avatars are read from the canonical media_assets table (not the
+    // public_profiles.avatar_url view column) so discovery stays resilient to
+    // the PostgREST view-schema cache. One batched query resolves the newest
+    // `<profileId>/avatar-*` asset per profile.
+    const avatarByProfile = await loadAvatarUrls(
+      supabase,
+      rows.map((r) => r.id),
+    )
+
+    return rows
+      .map((row) => toDiscoveryProfile(row, avatarByProfile.get(row.id) ?? null))
       .filter((p): p is DiscoveryProfile => p !== null)
   } catch (err) {
     console.log('[v0] fetchLiveDiscoveryProfiles threw:', (err as Error).message)
     return []
+  }
+}
+
+/**
+ * Resolve current avatar public URLs for many profiles in one query, keyed by
+ * profile id. Uses the upload path convention `<profileId>/avatar-<ts>.<ext>`;
+ * newest row per profile wins. Never throws — returns an empty map on failure
+ * so discovery still renders with default imagery.
+ */
+async function loadAvatarUrls(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  profileIds: string[],
+): Promise<Map<string, string>> {
+  const byProfile = new Map<string, string>()
+  if (profileIds.length === 0) return byProfile
+
+  try {
+    const { data, error } = await supabase
+      .from('media_assets')
+      .select('profile_id, public_url, storage_path, created_at')
+      .in('profile_id', profileIds)
+      .like('storage_path', '%/avatar-%')
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      console.log('[v0] loadAvatarUrls error:', error.message)
+      return byProfile
+    }
+
+    for (const row of data ?? []) {
+      const pid = row.profile_id as string
+      const url = row.public_url as string | null
+      // Rows are newest-first, so the first seen per profile is the current one.
+      if (pid && url && !byProfile.has(pid)) byProfile.set(pid, url)
+    }
+    return byProfile
+  } catch (err) {
+    console.log('[v0] loadAvatarUrls threw:', (err as Error).message)
+    return byProfile
   }
 }

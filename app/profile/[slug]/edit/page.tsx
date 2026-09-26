@@ -66,7 +66,7 @@ export default async function EditProfilePage({
 
   const { data: owned } = await supabase
     .from('profiles')
-    .select('id, slug, display_name, type, avatar_media_id')
+    .select('id, slug, display_name, type')
     .eq('slug', slug)
     .maybeSingle()
   if (!owned) notFound()
@@ -77,14 +77,20 @@ export default async function EditProfilePage({
   if (MODULAR_PROFILES_FLOW && isProfileType(owned.type)) {
     const initialModules = await getEditorModules(owned.id)
 
-    // Current avatar (if any) for the uploader preview. RLS lets a member read
-    // their own profile's media even while the profile is still a draft.
+    // Current avatar (if any) for the uploader preview. Read from the canonical
+    // media_assets table by the upload path convention `<profileId>/avatar-*`
+    // (newest wins) rather than the new profiles.avatar_media_id column, so the
+    // editor stays resilient to the PostgREST schema cache. RLS lets a member
+    // read their own profile's media even while the profile is still a draft.
     let initialAvatarUrl: string | null = null
-    if (owned.avatar_media_id) {
+    {
       const { data: media } = await supabase
         .from('media_assets')
-        .select('public_url')
-        .eq('id', owned.avatar_media_id)
+        .select('public_url, storage_path, created_at')
+        .eq('profile_id', owned.id)
+        .like('storage_path', `${owned.id}/avatar-%`)
+        .order('created_at', { ascending: false })
+        .limit(1)
         .maybeSingle()
       initialAvatarUrl = (media?.public_url as string | null) ?? null
     }
