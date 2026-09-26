@@ -9,6 +9,14 @@ import { ModuleView } from "@/components/profile/module-view"
 import { getShowcaseProfile, SHOWCASE_PROFILES } from "@/lib/profiles/showcase"
 import { getPublicModularProfile } from "@/lib/profiles/modules/public-profile"
 import { MODULAR_PROFILES_FLOW } from "@/lib/flags"
+import { decidePublicRender, isDemoFallbackAllowed } from "@/lib/profiles/public-render-decision"
+
+function demoFallbackAllowed() {
+  return isDemoFallbackAllowed({
+    vercelEnv: process.env.VERCEL_ENV ?? process.env.NODE_ENV,
+    demoFallbackFlag: process.env.PROFILE_DEMO_FALLBACK,
+  })
+}
 
 export function generateStaticParams() {
   return SHOWCASE_PROFILES.map((p) => ({ slug: p.slug }))
@@ -32,9 +40,16 @@ export async function generateMetadata({
   }
 
   const profile = getShowcaseProfile(slug)
-  if (!profile) return { title: "Profile not found — GigStar" }
+  const decision = decidePublicRender({
+    modularFlow: MODULAR_PROFILES_FLOW,
+    modularFound: false,
+    isShowcaseSlug: Boolean(profile),
+    demoFallbackAllowed: demoFallbackAllowed(),
+  })
+  if (!profile || decision === "not-found") return { title: "Profile not found — GigStar" }
+  const titlePrefix = decision === "demo" ? "Demo example: " : ""
   return {
-    title: `${profile.displayName} — ${profile.tagline} | GigStar`,
+    title: `${titlePrefix}${profile.displayName} — ${profile.tagline} | GigStar`,
     description: profile.bio[0],
   }
 }
@@ -101,11 +116,30 @@ export default async function ShowcaseProfilePage({
   }
 
   const profile = getShowcaseProfile(slug)
-  if (!profile) notFound()
+  const decision = decidePublicRender({
+    modularFlow: MODULAR_PROFILES_FLOW,
+    modularFound: false,
+    isShowcaseSlug: Boolean(profile),
+    demoFallbackAllowed: demoFallbackAllowed(),
+  })
+
+  // In production, a modular-lookup miss on a demo slug must NOT silently render
+  // sample content dressed up as a real profile — that masks data/persistence
+  // failures. Only render the demo when it is explicitly allowed, and always
+  // label it so it can never be mistaken for a real published profile.
+  if (!profile || decision === "not-found") notFound()
 
   return (
     <div className="flex min-h-dvh flex-col bg-background">
       <SiteHeader />
+      {decision === "demo" ? (
+        <div
+          role="status"
+          className="bg-amber-100 px-4 py-2 text-center text-sm font-medium text-amber-900"
+        >
+          Demo example — sample content, not a real GigStar profile.
+        </div>
+      ) : null}
       <main className="flex-1">
         <ShowcaseHeaderClient profile={profile} />
         <div className="mx-auto mt-8 max-w-5xl px-4 sm:px-6">
