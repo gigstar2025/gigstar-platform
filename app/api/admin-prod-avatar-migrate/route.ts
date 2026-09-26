@@ -206,7 +206,19 @@ export async function GET(req: Request) {
   }
 
   const { Client } = await import("pg")
-  const client = new Client({ connectionString: pgUrl, ssl: { rejectUnauthorized: false } })
+  // Build the client from discrete fields rather than the connection string.
+  // A `sslmode=require` query param in the connection string can cause
+  // node-postgres to ignore the explicit `ssl` object, which produces a
+  // "self-signed certificate in certificate chain" error against Supabase.
+  const pg = new URL(pgUrl)
+  const client = new Client({
+    host: pg.hostname,
+    port: pg.port ? Number(pg.port) : 5432,
+    user: decodeURIComponent(pg.username),
+    password: decodeURIComponent(pg.password),
+    database: pg.pathname.replace(/^\//, "") || "postgres",
+    ssl: { rejectUnauthorized: false },
+  })
   try {
     await client.connect()
     const before = await client.query(
