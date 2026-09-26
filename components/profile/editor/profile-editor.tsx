@@ -136,7 +136,7 @@ function EditorInner({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="ghost" size="sm" nativeButton={false} render={<Link href={`/p/${draft.slug}`} target="_blank" />}>
-            <ExternalLink className="size-4" /> View public profile
+            <ExternalLink className="size-4" /> View showcase example
           </Button>
           <Button variant="outline" size="sm" className="xl:hidden" onClick={() => setShowPreviewOverlay(true)}>
             <Eye className="size-4" /> Preview
@@ -148,10 +148,20 @@ function EditorInner({
           ) : null}
           <Button size="sm" onClick={handleSave} disabled={saveState === 'saving'}>
             {saveState === 'saving' ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-            Save draft
+            Save to this device
           </Button>
         </div>
       </div>
+
+      <p className="mb-4 flex items-start gap-2 rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm text-muted-foreground">
+        <Info className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
+        <span>
+          <strong className="font-medium text-foreground">Showcase example.</strong> This is a sample profile for
+          trying out the editor. Changes are kept on this device only &mdash; they are{' '}
+          <strong className="font-medium text-foreground">not saved to your account and not published</strong>. Your
+          real profile is edited and published from its own editor.
+        </span>
+      </p>
 
       {storageWarned ? (
         <p className="mb-4 flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-300">
@@ -278,9 +288,9 @@ function EditorInner({
 }
 
 function SaveStatus({ dirty, savedAt, saveState }: { dirty: boolean; savedAt: string | null; saveState: SaveState }) {
-  let text = 'All changes saved'
-  if (saveState === 'saving') text = 'Saving…'
-  else if (saveState === 'saved') text = 'Draft saved'
+  let text = 'Saved on this device'
+  if (saveState === 'saving') text = 'Saving to this device…'
+  else if (saveState === 'saved') text = 'Saved on this device'
   else if (saveState === 'error') text = 'Could not save'
   else if (dirty) text = 'Unsaved changes'
   else if (!savedAt) text = 'No local draft yet'
